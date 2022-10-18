@@ -61,6 +61,7 @@ if isempty(OutputChannelFile)
         case 'CURRY-RES',      DefaultExt = '.res';
         case 'EEGLAB-XYZ',     DefaultExt = '.xyz';
         case 'EGI',            DefaultExt = '.sfp';
+        case 'AtlasViewer-SD', DefaultExt = '.sd';
         case 'BRAINSIGHT-TXT', DefaultExt = '.txt';
         otherwise,             DefaultExt = '.pos';
     end
@@ -218,6 +219,15 @@ switch FileFormat
             out_channel_nirs_brainsight(BstChannelFile, OutputChannelFile, sSubject.Anatomy(sSubject.iAnatomy).FileName); %ADDTV
         else
             out_channel_nirs_brainsight(BstChannelFile, OutputChannelFile);
+        end
+
+
+    case 'AtlasViewer-SD'
+        sSubject = bst_get('Subject');
+        if sSubject.iAnatomy > 0
+            out_channel_nirs_atlasviewer(BstChannelFile, OutputChannelFile, sSubject.Anatomy(sSubject.iAnatomy).FileName); %ADDTV
+        else
+            out_channel_nirs_atlasviewer(BstChannelFile, OutputChannelFile);
         end
     otherwise
         error(['Unsupported file format : "' FileFormat '"']);
