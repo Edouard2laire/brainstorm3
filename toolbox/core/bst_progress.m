@@ -77,8 +77,9 @@ if ~bst_get('isGUI')
     return;
 end
 % Get progress bar
-if ~isempty(GlobalData) && ~isempty(GlobalData.Program) && isfield(GlobalData.Program, 'ProgressBar') && ~isempty(GlobalData.Program.ProgressBar)
-    pBar = GlobalData.Program.ProgressBar;
+
+if ~isempty(GlobalData) && ~isempty(GlobalData.Program) && isfield(GlobalData.Program, 'ProgressBar') && ~isempty(GlobalData.Program.ProgressBar) && ~strcmp(lower(commandName),'start')
+    pBar = GlobalData.Program.ProgressBar(end);
 else
     pBar = [];
 end
@@ -149,7 +150,11 @@ if isempty(pBar)
            jLoc.getY() + ((jSize.getHeight() - DefaultSize.getHeight()) / 2)];
     pBar.jWindow.setLocation(pos(1), pos(2));
     % Save progress bar
-    GlobalData.Program.ProgressBar = pBar;
+    if isempty(GlobalData.Program.ProgressBar)
+        GlobalData.Program.ProgressBar = pBar;
+    else
+        GlobalData.Program.ProgressBar(end+1) = pBar;
+    end
 end
 
 % Linux: need to print something on the command window (don't know why...)
@@ -241,6 +246,8 @@ switch (lower(commandName))
             pBar.jWindow.setPreferredSize(DefaultSize);
             pBar.jWindow.pack();
         end
+
+        GlobalData.Program.ProgressBar  = GlobalData.Program.ProgressBar(1:end-1);
         
     % ==== INCREMENT ====
     case 'inc'
