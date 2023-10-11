@@ -7,7 +7,7 @@ function varargout = process_ft_sourcestatistics( varargin )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -190,7 +190,7 @@ function sOutput = Run(sProcess, sInputsA, sInputsB) %#ok<DEFNU>
     statcfg.correctm = OPT.Correction;
     switch (OPT.Correction)
         case 'no'
-        case 'cluster'
+        case {'cluster', 'tfce'}
             % Define parameters for cluster statistics
             statcfg.clusteralpha     = OPT.ClusterAlphaValue;
             statcfg.clustertail      = statcfg.tail;
@@ -217,7 +217,7 @@ function sOutput = Run(sProcess, sInputsA, sInputsB) %#ok<DEFNU>
         return;
     end
     % Apply thresholded mask on the p-values (the prob map is already thresholded for clusters)
-    if ~ismember(OPT.Correction, {'no', 'cluster'})
+    if ~ismember(OPT.Correction, {'no', 'cluster', 'tfce'})
         ftStat.prob(~ftStat.mask) = .999;
     end
     % Replace NaN values with zeros

@@ -16,7 +16,7 @@ function [FigData, iDS, iFig] = gui_figure_data( hFig, varargin )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -54,7 +54,7 @@ FigData.AxesLegend = {};
 [hFig, iFig, iDS] = bst_figures('GetFigure', hFig);
 Handles = GlobalData.DataSet(iDS).Figure(iFig).Handles;
 % Check downsampling factor
-if Handles.DownsampleFactor
+if (Handles.DownsampleFactor > 1)
     error(['The signals were downsampled before being displayed and cannot be exported from the figure.' 10 ...
         'For continuous files: import the recordings first.' 10 ...
         'For imported time series: read directly the corresponding .mat files.' 10 ...

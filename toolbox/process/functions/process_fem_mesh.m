@@ -3,16 +3,16 @@ function varargout = process_fem_mesh( varargin )
 %
 % USAGE:     OutputFiles = process_fem_mesh('Run',     sProcess, sInputs)
 %         [isOk, errMsg] = process_fem_mesh('Compute', iSubject, iMris=[default], isInteractive, OPTIONS)
-%                          process_fem_mesh('ComputeInteractive', iSubject, iMris=[default])
 %                OPTIONS = process_fem_mesh('GetDefaultOptions')
 %                  label = process_fem_mesh('GetFemLabel', label)
 %             NewFemFile = process_fem_mesh('SwitchHexaTetra', FemFile)
+%  [sSubject, T1File, T2File, errMsg] = process_fem_mesh('GetT1T2', iSubject, iMris=[])
 
 % @=============================================================================
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -26,7 +26,7 @@ function varargout = process_fem_mesh( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, Takfarinas Medani, 2019-2021
+% Authors: Francois Tadel, Takfarinas Medani, 2019-2023
 
 eval(macro_method);
 end
@@ -51,22 +51,24 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.subjectname.Type    = 'subjectname';
     sProcess.options.subjectname.Value   = '';
     % Method
-    sProcess.options.method.Comment = {'<B>Iso2mesh</B>:<BR>Call iso2mesh to create a tetrahedral mesh from the <B>BEM surfaces</B><BR>', ...
-                                       '<B>Brain2mesh</B>:<BR>Segment the <B>T1</B> (and <B>T2</B>) <B>MRI</B> with SPM12, mesh with Brain2Mesh<BR>', ...
-                                       '<B>SimNIBS</B>:<BR>Call SimNIBS to segment and mesh the <B>T1</B> (and <B>T2</B>) <B>MRI</B>.', ...
+    sProcess.options.method.Comment = {'<B>Iso2mesh-2021</B>:<BR>Call iso2mesh to create a tetrahedral mesh from the <B>BEM surfaces</B><BR>', ...
+                                       '<B>Iso2mesh</B>:<BR>Previous version of this method (useful in case the new one fails)<BR>', ...
+                                       '<B>Brain2mesh</B>:<BR>Segment the <B>T1</B> (and <B>T2</B>) <B>MRI</B> with SPM12, mesh with Brain2mesh<BR>', ...
+                                       '<B>SimNIBS 3.x</B>:<BR>Call SimNIBS/headreco to segment and mesh the <B>T1</B> (and <B>T2</B>) <B>MRI</B>.', ...
+                                       '<B>SimNIBS 4.x</B>:<BR>Call SimNIBS/charm to segment and mesh the <B>T1</B> (and <B>T2</B>) <B>MRI</B>.', ...
                                        '<B>FieldTrip</B>:<BR> Call FieldTrip to create hexahedral mesh of the <B>T1 MRI</B>.'; ...
-                                       'iso2mesh', 'brain2mesh', 'simnibs', 'fieldtrip'};
+                                       'iso2mesh-2021', 'iso2mesh', 'brain2mesh', 'simnibs3', 'simnibs4', 'fieldtrip'};
     sProcess.options.method.Type    = 'radio_label';
     sProcess.options.method.Value   = 'iso2mesh';
     % Iso2mesh options: 
-    sProcess.options.opt1.Comment = '<BR><BR><B>Iso2mesh options</B>: ';
+    sProcess.options.opt1.Comment = '<BR><B>Iso2mesh options</B>: ';
     sProcess.options.opt1.Type    = 'label';
     % Iso2mesh: Merge method
     sProcess.options.mergemethod.Comment = {'mergemesh', 'mergesurf', 'Input surfaces merged with:'; 'mergemesh', 'mergesurf', ''};
     sProcess.options.mergemethod.Type    = 'radio_linelabel';
     sProcess.options.mergemethod.Value   = 'mergemesh';
     % Iso2mesh: Max tetrahedral volume
-    sProcess.options.maxvol.Comment = 'Max tetrahedral volume (10=coarse, 0.0001=fine, default=0.1): ';
+    sProcess.options.maxvol.Comment = 'Max tetrahedral volume (in cm<SUP>3</SUP>) (10=coarse, 0.0001=fine, default=0.1): ';
     sProcess.options.maxvol.Type    = 'value';
     sProcess.options.maxvol.Value   = {OPTIONS.MaxVol, '', 4};
     % Iso2mesh: keepratio: Percentage of elements being kept after the simplification
@@ -79,11 +81,15 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % SimNIBS: Vertex density
     sProcess.options.vertexdensity.Comment = 'Vertex density: nodes per mm2 (0.1-1.5, default=0.5): ';
     sProcess.options.vertexdensity.Type    = 'value';
-    sProcess.options.vertexdensity.Value   = {OPTIONS.VertexDensity, '', 2};
+    sProcess.options.vertexdensity.Value   = {OPTIONS.VertexDensity, '(SimNIBS3 only)', 2};
     % SimNIBS: Number of vertices
-    sProcess.options.nvertices.Comment = 'Number of vertices (CAT12 cortex): ';
+    sProcess.options.nvertices.Comment = 'Number of vertices of the cortex surface: ';
     sProcess.options.nvertices.Type    = 'value';
     sProcess.options.nvertices.Value   = {15000, '', 0};
+    % SimNIBS: Import default EEG caps
+    sProcess.options.iseegcaps.Comment = 'Import default EEG caps';
+    sProcess.options.iseegcaps.Type    = 'checkbox';
+    sProcess.options.iseegcaps.Value   = 0;
     % FieldTrip options:
     sProcess.options.opt3.Comment = '<BR><B>FieldTrip options</B>: ';
     sProcess.options.opt3.Type    = 'label';
@@ -135,7 +141,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     end
     % Method
     OPTIONS.Method = sProcess.options.method.Value;
-    if isempty(OPTIONS.Method) || ~ischar(OPTIONS.Method) || ~ismember(OPTIONS.Method, {'iso2mesh','brain2mesh','simnibs','fieldtrip'})
+    if isempty(OPTIONS.Method) || ~ischar(OPTIONS.Method) || ~ismember(OPTIONS.Method, {'iso2mesh-2021','iso2mesh','brain2mesh','simnibs3','simnibs4','fieldtrip'})
         bst_report('Error', sProcess, [], 'Invalid method.');
         return
     end
@@ -170,6 +176,8 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         bst_report('Error', sProcess, [], 'Invalid number of vertices.');
         return
     end
+    % SimNIBS: Import EEG caps
+    OPTIONS.isEegCaps = sProcess.options.iseegcaps.Value;
     % FieldTrip: Node shift
     OPTIONS.NodeShift = sProcess.options.nodeshift.Value{1};
     if isempty(OPTIONS.NodeShift) || (OPTIONS.NodeShift < 0) || (OPTIONS.NodeShift >= 0.5)
@@ -199,14 +207,15 @@ end
 %% ===== DEFAULT OPTIONS =====
 function OPTIONS = GetDefaultOptions()
     OPTIONS = struct(...
-        'Method',         'iso2mesh', ...      % {'iso2mesh', 'brain2mesh', 'simnibs', 'roast', 'fieldtrip'}
+        'Method',         'iso2mesh-2021', ... % {'iso2mesh-2021', 'iso2mesh', 'brain2mesh', 'simnibs3', 'simnibs4', 'roast', 'fieldtrip'}
         'MeshType',       'tetrahedral', ...   % iso2mesh: 'tetrahedral';  simnibs: 'tetrahedral';  roast:'hexahedral'/'tetrahedral';  fieldtrip:'hexahedral'/'tetrahedral' 
         'MaxVol',         0.1, ...             % iso2mesh: Max tetrahedral volume (10=coarse, 0.0001=fine)
         'KeepRatio',      100, ...             % iso2mesh: Percentage of elements kept (1-100%)
         'BemFiles',       [], ...              % iso2mesh: List of layers to use for meshing (if not specified, use the files selected in the database 
         'MergeMethod',    'mergemesh', ...     % iso2mesh: {'mergemesh', 'mergesurf'} Function used to merge the meshes
         'VertexDensity',  0.5, ...             % SimNIBS: [0.1 - X] setting the vertex density (nodes per mm2)  of the surface meshes
-        'NbVertices',     15000, ...           % SimNIBS: Number of vertices for the cortex surface imported from CAT12 
+        'NbVertices',     15000, ...           % SimNIBS: Number of vertices for the cortex surface
+        'isEegCaps',      0, ...               % SimNIBS: If 1, import the default EEG caps generated by SimNIBS
         'NodeShift',      0.3, ...             % FieldTrip: [0 - 0.49] Improves the geometrical properties of the mesh
         'Downsample',     3, ...               % FieldTrip: Integer, Downsampling factor to apply to the volumes before meshing
         'Zneck',          -115);               % Input T1/T2: Cut volumes below neck (MNI Z-coordinate)
@@ -217,6 +226,7 @@ end
 function [isOk, errMsg] = Compute(iSubject, iMris, isInteractive, OPTIONS)
     isOk = 0;
     errMsg = '';
+    TmpDir = [];
 
     % ===== DEFAULT OPTIONS =====
     Def_OPTIONS = GetDefaultOptions();
@@ -225,83 +235,29 @@ function [isOk, errMsg] = Compute(iSubject, iMris, isInteractive, OPTIONS)
     else
         OPTIONS = struct_copy_fields(OPTIONS, Def_OPTIONS, 0);
     end
-    % Empty temporary folder, otherwise it reuses previous files in the folder
-    gui_brainstorm('EmptyTempFolder');
-            
+    % Replace old option 'simnibs' with 'simnibs3'
+    if strcmpi(OPTIONS.Method, 'simnibs')
+        OPTIONS.Method = 'simnibs3';
+    end
+
     % ===== GET T1/T2 MRI =====
-    % Get subject
-    sSubject = bst_get('Subject', iSubject);
-    if isempty(sSubject)
-        errMsg = 'Subject does not exist.';
-        return
+    [sSubject, T1File, T2File, errMsg, iT1] = GetT1T2(iSubject, iMris);
+    if ~isempty(errMsg)
+        return;
     end
-    % Check if a MRI is available for the subject
-    if isempty(sSubject.Anatomy)
-        errMsg = ['No MRI available for subject "' SubjectName '".'];
-        return
-    end
-    % Get default MRI if not specified
-    if isempty(iMris)
-        iMris = 1:length(sSubject.Anatomy);
-        tryDefaultT2 = 0;
-    else
-        tryDefaultT2 = 1;
-    end
-    % If there are multiple MRIs: order them to put the default one first (probably a T1)
-    if (length(iMris) > 1)
-        % Select the default MRI as the T1
-        if ismember(sSubject.iAnatomy, iMris)
-            iT1 = sSubject.iAnatomy;
-            iMris = iMris(iMris ~= sSubject.iAnatomy);
-        else
-            iT1 = [];
-        end
-        % Find other possible T1
-        if isempty(iT1)
-            iT1 = find(~cellfun(@(c)isempty(strfind(c,'t1')), lower({sSubject.Anatomy(iMris).Comment})));
-            if ~isempty(iT1)
-                iT1 = iMris(iT1(1));
-                iMris = iMris(iMris ~= iT1);
-            end
-        end
-        % Find any possible T2
-        iT2 = find(~cellfun(@(c)isempty(strfind(c,'t2')), lower({sSubject.Anatomy(iMris).Comment})));
-        if ~isempty(iT2)
-            iT2 = iMris(iT2(1));
-            iMris = iMris(iMris ~= iT2);
-        else
-            iT2 = [];
-        end
-        % If not identified yet, use first MRI as T1
-        if isempty(iT1)
-            iT1 = iMris(1);
-            iMris = iMris(2:end);
-        end
-        % If not identified yet, use following MRI as T2
-        if isempty(iT2) && tryDefaultT2
-            iT2 = iMris(1);
-        end
-    else
-        iT1 = iMris(1);
-        iT2 = [];
-    end
-    % Get full file names
-    T1File = file_fullpath(sSubject.Anatomy(iT1).FileName);
-    if ~isempty(iT2)
-        T2File = file_fullpath(sSubject.Anatomy(iT2).FileName);
-    else
-        T2File = [];
-    end
-        
+
     % ===== LOAD/CUT T1 =====
-    if ismember(lower(OPTIONS.Method), {'brain2mesh', 'simnibs', 'roast'})
+    if ismember(lower(OPTIONS.Method), {'brain2mesh', 'simnibs3', 'simnibs4', 'roast'})
         sMriT1 = in_mri_bst(T1File);
         % Cut neck (below MNI coordinate below Z=Zneck)
         if (OPTIONS.Zneck < 0)
             [sMriT1tmp, maskCut, errNorm] = process_mri_deface('CutMriPlane', sMriT1, [0, 0, 1, -OPTIONS.Zneck./1000]);
-            % Error handling (if MNI normalization failed)
+            % Error handling (e.g. if MNI normalization failed)
             if ~isempty(errNorm)
-                errMsg = ['Error trying to cut the neck from T1 using linear MNI normalization: ' 10 errNorm 10];
+                % Do not issue warning if cutting the neck didn't do anything: users shouldn't get a warning if there is no neck in the MRI 
+                if isempty(strfind(errNorm, 'No voxels'))
+                    errMsg = ['Error trying to cut the neck from T1 using linear MNI normalization: ' 10 errNorm 10];
+                end
                 % Do not return: This is only a warning
             elseif ~isempty(sMriT1tmp)
                 sMriT1 = sMriT1tmp;
@@ -310,28 +266,196 @@ function [isOk, errMsg] = Compute(iSubject, iMris, isInteractive, OPTIONS)
             errMsg = 'Invalid neck MNI Z coordinate (must be negative or zero).';
             return;
         end
+        % A vox2ras matrix must be present in the MRI
+        sMriT1 = mri_add_world(T1File, sMriT1);
     end
 
     % ===== LOAD/CUT T2 =====
-    if ~isempty(T2File) && ismember(lower(OPTIONS.Method), {'brain2mesh', 'simnibs', 'roast'})
+    if ~isempty(T2File) && ismember(lower(OPTIONS.Method), {'brain2mesh', 'simnibs3', 'simnibs4', 'roast'})
         sMriT2 = in_mri_bst(T2File);
         % Cut neck (below MNI coordinate below Z=Zneck)
         if (OPTIONS.Zneck < 0)
             [sMriT2tmp, maskCut, errNorm] = process_mri_deface('CutMriPlane', sMriT2, [0, 0, 1, -OPTIONS.Zneck./1000]);
             % Error handling (if MNI normalization failed)
             if ~isempty(errNorm)
-                errMsg = ['Error trying to cut the neck from T1 using linear MNI normalization: ' 10 errNorm 10 10];
+                % Do not issue warning if cutting the neck didn't do anything: users shouldn't get a warning if there is no neck in the MRI 
+                if isempty(strfind(errNorm, 'No voxels'))
+                    errMsg = ['Error trying to cut the neck from T1 using linear MNI normalization: ' 10 errNorm 10 10];
+                end
                 % Do not return: This is only a warning
             elseif ~isempty(sMriT2tmp)
                 sMriT2 = sMriT2tmp;
             end
         end
+        % A vox2ras matrix must be present in the MRI
+        sMriT2 = mri_add_world(T2File, sMriT2);
     end
     FemFile = [];
     
     % ===== GENERATE MESH =====
     switch lower(OPTIONS.Method)
         % Compute from OpenMEEG BEM layers: head, outerskull, innerskull
+        case 'iso2mesh-2021'
+            % Install/load iso2mesh plugin
+            [isInstalled, errInstall] = bst_plugin('Install', 'iso2mesh', isInteractive);
+            if ~isInstalled
+                errMsg = [errMsg, errInstall];
+                return;
+            end
+            bst_plugin('SetProgressLogo', 'iso2mesh');
+            % If surfaces are not passed in input: get default surfaces
+            if isempty(OPTIONS.BemFiles)
+                if ~isempty(sSubject.iScalp) && ~isempty(sSubject.iOuterSkull) && ~isempty(sSubject.iInnerSkull)
+                    OPTIONS.BemFiles = {...
+                        sSubject.Surface(sSubject.iInnerSkull).FileName, ...
+                        sSubject.Surface(sSubject.iOuterSkull).FileName, ...
+                        sSubject.Surface(sSubject.iScalp).FileName};
+                    TissueLabels = {'brain', 'skull', 'scalp'};
+                else
+                    errMsg = ['Method "' OPTIONS.Method '" requires three surfaces: head, inner skull and outer skull.' 10 ...
+                        'Create them with process "Generate BEM surfaces" first.'];
+                    return;
+                end
+            % If surfaces are given: get their labels and sort from inner to outer
+            else
+                % Get tissue label
+                for iBem = 1:length(OPTIONS.BemFiles)
+                    [sSubject, iSubject, iSurface] = bst_get('SurfaceFile', OPTIONS.BemFiles{iBem});
+                    % Get tissue label
+                    if ~strcmpi(sSubject.Surface(iSurface).SurfaceType, 'Other')
+                        TissueLabels{iBem} = GetFemLabel(sSubject.Surface(iSurface).SurfaceType);
+                    else
+                        TissueLabels{iBem} = GetFemLabel(sSubject.Surface(iSurface).Comment);
+                    end
+                end
+                % If there is a CSF layer but nothing inside: rename into BRAIN
+                if ismember('csf', TissueLabels) && ~ismember('white', TissueLabels) && ~ismember('gray', TissueLabels)
+                    TissueLabels{ismember(TissueLabels, 'csf')} = 'brain';
+                end
+            end      
+            % Load surfaces
+            bst_progress('text', 'Loading surfaces...');
+            bemMerge = {};
+            disp(' ');
+            nBem = length(OPTIONS.BemFiles);
+            distance_in = zeros(1,nBem);
+            allNodes = [];
+            for iBem = 1:nBem                               
+                disp(sprintf('FEM> %d. %5s: %s', iBem, TissueLabels{iBem}, OPTIONS.BemFiles{iBem}));        
+                BemMat = in_tess_bst(OPTIONS.BemFiles{iBem});
+                bemMerge = cat(2, bemMerge, BemMat.Vertices, BemMat.Faces);
+                allNodes = [allNodes; BemMat.Vertices];
+            end
+            % Compute the center of the mesh
+            center_inner = mean(allNodes, 1);
+            
+            % Compute the distances
+            for iBem = 1:nBem
+                faceList = unique(bemMerge{2*iBem});
+                nodeList = bemMerge{2*iBem - 1}(faceList,:);
+                % Find the largest distance between two point
+                maxYcoor = max(nodeList(:,2));
+                minYcoor = min(nodeList(:,2));
+                maxYpoint = [center_inner(1) maxYcoor center_inner(3)];
+                minYpoint = [center_inner(1) minYcoor center_inner(3)];
+                % Find the nearest node on the mesh and update
+                k = dsearchn(nodeList,[maxYpoint;minYpoint]);
+                maxYpoint = nodeList(k(1),:); minYpoint = nodeList(k(2),:);
+                distance_in(iBem) = norm(maxYpoint-minYpoint);
+                listPointasSeed(iBem,:) = maxYpoint;
+            end
+            %  Sort from inner to outer
+            [tmp, orderIn] = sort(distance_in);
+            distance_in = distance_in(orderIn);
+            % update the reorder of the labels from inner to outer
+            bemMerge = bemMerge(reshape([2*orderIn-1; 2*orderIn], 1, []));
+            TissueLabels = TissueLabels(orderIn);
+            listPointasSeed = listPointasSeed(orderIn,:);
+            listPointasSeed = bst_bsxfun(@minus, listPointasSeed, [0 0.002 0]);
+            listPointasSeed(1,:) = center_inner;
+            disp(' ');
+            % Merge all the surfaces
+            bst_progress('text', ['Merging surfaces (Iso2mesh/' OPTIONS.MergeMethod ')...']);
+            switch (OPTIONS.MergeMethod)
+                % Faster and simpler: Simple concatenation without intersection checks
+                case 'mergemesh'
+                    % Concatenate meshes
+                    [newnode, newelem] = mergemesh(bemMerge{:});
+                    % Remove duplicated elements
+                    % newelem = unique(sort(newelem,2),'rows');
+                % Slower and more robust: Concatenates and checks for intersections (split intersecting elements)
+                case 'mergesurf'
+                    try
+                        [newnode, newelem] = mergesurf(bemMerge{:});
+                    catch
+                        errMsg = 'Problem with the function MergeSurf. You can try with MergeMesh.';
+                        bst_progress('stop');
+                        return;
+                    end
+                otherwise
+                    error(['Invalid merge method: ' OPTIONS.MergeMethod]);
+            end
+
+            % Find the intersection between the vertical axis (from the head center to the vertex) and all the BEM layers
+            regions = listPointasSeed;
+            % Create tetrahedral mesh
+            bst_progress('text', 'Creating 3D mesh (Iso2mesh/surf2mesh)...');
+            factor_bst = 1.e-6;
+            [node,elem] = surf2mesh(newnode, newelem, min(newnode), max(newnode),...
+                OPTIONS.KeepRatio, factor_bst .* OPTIONS.MaxVol, (regions), [], [], 'tetgen1.5');            
+            % Removing the label 0 (Tetgen 1.4) or higher than number of layers (Tetgen 1.5)
+            bst_progress('text', 'Fixing 3D mesh...');
+            
+            % Check labelling from 1 to nBem
+            allLabels = unique(elem(:,5));
+            % id =6; figure; plotmesh(node,elem(elem(:,5)==id,:),'facealpha',0.2,'edgecolor','none'); hold on; plotmesh(orig,'ko') 
+            % Process the outputs:  compute the distances
+            bst_progress('text', 'Identification of the 3D volumes...');
+            distance_out= zeros(1,length(allLabels));
+            for ind = 1: length(allLabels) 
+                elemList = elem(elem(:,5)==allLabels(ind),1:end-1);
+                elemList = unique(elemList(:)); % figure; plotmesh(node(elemList,:),'r.');xlabel('x');ylabel('y');zlabel('z');
+                nodeList = node(elemList,:);
+                maxYcoor = max(nodeList(:,2));
+                minYcoor = min(nodeList(:,2));
+                maxYpoint = [center_inner(1) maxYcoor center_inner(3)];
+                minYpoint = [center_inner(1) minYcoor center_inner(3)];
+                k = dsearchn(nodeList,[maxYpoint;minYpoint]);
+                maxYpoint = nodeList(k(1),:); minYpoint = nodeList(k(2),:);
+                % figure; plotmesh(node(elemList,:),'r.');xlabel('x');ylabel('y');zlabel('z');hold on; plotmesh([maxYpoint;minYpoint],'bo') 
+                distance_out(ind) = norm(maxYpoint-minYpoint);
+            end
+            % Sort weired elements, works in all case even when there are more output tissues than inputs
+            distOut_tmp = distance_out;
+            for ind = 1 : length(distance_in)
+                tmp = find(round(distOut_tmp,3)<=round(distance_in(ind),3));
+                distOut_tmp(tmp) = ind;
+            end
+            % Replace with the correct ID
+            tmp = elem;
+            tmp(:,5) = tmp(:,5) +10; % translation to avoind overlapping
+            allLabels = unique(tmp(:,5));
+            for  ind = 1: length(allLabels) 
+                tmp(tmp(:,5) == allLabels(ind),5) = distOut_tmp(ind);
+            end        
+            % Check again just in case
+             allLabels = unique(tmp(:,5));
+            if ~isequal(allLabels(:)', 1:nBem)
+                errMsg = ['Problem with tissue labels: Brainstorm cannot understand the output labels (' num2str(allLabels(:)') ').'];
+                bst_progress('stop');
+                return;
+            end
+            elem = tmp;
+            % Mesh check and repair
+            [no,el] = removeisolatednode(node,elem(:,1:4));
+            % Orientation required for the FEM computation (at least with SimBio, maybe not for Duneuro)
+            newelem = meshreorient(no, el(:,1:4));
+            elem = [newelem elem(:,5)];
+            node = no; % need to updates the new list of nodes (it's wiered that it was working before)
+            % Only tetra could be generated from this method
+            OPTIONS.MeshType = 'tetrahedral';     
+        
+        % Old version
         case 'iso2mesh'
             % Install/load iso2mesh plugin
             [isInstalled, errInstall] = bst_plugin('Install', 'iso2mesh', isInteractive);
@@ -464,32 +588,36 @@ function [isOk, errMsg] = Compute(iSubject, iMris, isInteractive, OPTIONS)
                 errMsg = [errMsg, errInstall];
                 return;
             end
+            % Load SPM12
+            [isOk, errMsg, PlugDesc] = bst_plugin('Load', 'spm12');
+            % Set logo
             bst_plugin('SetProgressLogo', 'brain2mesh');
             % Get TPM.nii template
             tpmFile = bst_get('SpmTpmAtlas');
-            if isempty(tpmFile) || ~file_exist(tpmFile)
+            if isempty(tpmFile)
                 error('Missing file TPM.nii');
             end
             
             % === SAVE MRI AS NII ===
             bst_progress('text', 'Exporting MRI...');
-            % Empty temporary folder, otherwise it may reuse previous files in the folder
-            gui_brainstorm('EmptyTempFolder');
             % Create temporary folder for segmentation files
-            tempDir = bst_fullfile(bst_get('BrainstormTmpDir'), 'brain2mesh');
-            mkdir(tempDir);
+            TmpDir = bst_get('BrainstormTmpDir', 0, 'brain2mesh');
             % Save T1 MRI in .nii format
             subjid = strrep(sSubject.Name, '@', '');
-            T1Nii = bst_fullfile(tempDir, [subjid 'T1.nii']);
+            T1Nii = bst_fullfile(TmpDir, [subjid 'T1.nii']);
             out_mri_nii(sMriT1, T1Nii);
             % Save T2 MRI in .nii format
             if ~isempty(T2File)
-                T2Nii = bst_fullfile(tempDir, [subjid 'T2.nii']);
+                T2Nii = bst_fullfile(TmpDir, [subjid 'T2.nii']);
                 out_mri_nii(sMriT2, T2Nii);
                 % Check the size of the volumes
                 if ~isequal(size(sMriT1.Cube), size(sMriT2.Cube)) || ~isequal(size(sMriT1.Voxsize), size(sMriT2.Voxsize))
                     errMsg = [errMsg, 'Input images have different dimension, you must register and reslice them first.' 10 ...
                               sprintf('T1:(%d x %d x %d),   T2:(%d x %d x %d)', size(sMriT1.Cube), size(sMriT2.Cube))];
+                    % Delete the temporary files
+                    if ~isempty(TmpDir)
+                        file_delete(TmpDir, 1, 1);
+                    end
                     return;
                 end
             else
@@ -543,29 +671,29 @@ function [isOk, errMsg] = Compute(iSubject, iMris, isInteractive, OPTIONS)
             % Call SPM batch
             spm_jobman('run', matlabbatch);
             % Check for success
-            testFile = bst_fullfile(tempDir, ['c5' subjid 'T1.nii']);
+            testFile = bst_fullfile(TmpDir, ['c5' subjid 'T1.nii']);
             if ~file_exist(testFile)
                 errMsg = [errMsg, 'SPM12 segmentation failed: missing output file "' testFile '".'];
                 return;
             end
             % Read outputs
-            sTpm = in_mri_nii(bst_fullfile(tempDir, ['c1' subjid 'T1.nii']), 0, 0, 0);
+            sTpm = in_mri_nii(bst_fullfile(TmpDir, ['c1' subjid 'T1.nii']), 0, 0, 0);
             seg.gm = sTpm.Cube;
-            sTpm = in_mri_nii(bst_fullfile(tempDir, ['c2' subjid 'T1.nii']), 0, 0, 0);
+            sTpm = in_mri_nii(bst_fullfile(TmpDir, ['c2' subjid 'T1.nii']), 0, 0, 0);
             seg.wm = sTpm.Cube;
-            sTpm = in_mri_nii(bst_fullfile(tempDir, ['c3' subjid 'T1.nii']), 0, 0, 0);
+            sTpm = in_mri_nii(bst_fullfile(TmpDir, ['c3' subjid 'T1.nii']), 0, 0, 0);
             seg.csf = sTpm.Cube;
-            sTpm = in_mri_nii(bst_fullfile(tempDir, ['c4' subjid 'T1.nii']), 0, 0, 0);
+            sTpm = in_mri_nii(bst_fullfile(TmpDir, ['c4' subjid 'T1.nii']), 0, 0, 0);
             seg.skull = sTpm.Cube;
-            sTpm = in_mri_nii(bst_fullfile(tempDir, ['c5' subjid 'T1.nii']), 0, 0, 0);
+            sTpm = in_mri_nii(bst_fullfile(TmpDir, ['c5' subjid 'T1.nii']), 0, 0, 0);
             seg.scalp = sTpm.Cube;
 
             % ===== CALL BRAIN2MESH =====
-            bst_progress('text', 'Meshing with Brain2Mesh...');
+            bst_progress('text', 'Meshing with Brain2mesh...');
             [node,elem] = brain2mesh(seg);
             % Handle errors
             if isempty(elem)
-                errMsg = [errMsg, 'Mesh generation with Brain2Mesh/tetgen1.5 failed.'];
+                errMsg = [errMsg, 'Mesh generation with Brain2mesh/tetgen1.5 failed.'];
                 return;
             end
             % Remove unwanted tissues (label <= 0)
@@ -576,18 +704,42 @@ function [isOk, errMsg] = Compute(iSubject, iMris, isInteractive, OPTIONS)
             % Relabel the tissues in the same order as the other options
             iRelabel = [5 4 3 2 1];
             elem(:,end) = reshape(iRelabel(elem(:,end)), [], 1);
+            % Flip the order of the elements
+            elem = elem(:, [2 1 3 4 5]);
+            % Convert positions from voxel to SCS coordinates
+            node = cs_convert(sMriT1, 'voxel', 'scs', node);
             % Name tissue labels
             TissueLabels = {'white','gray','csf','skull','scalp'};
             
             
-        case 'simnibs'
+        case {'simnibs3', 'simnibs4'}
             disp(['FEM> T1 MRI: ' T1File]);
             disp(['FEM> T2 MRI: ' T2File]);
             % Check for SimNIBS installation
-            status = system('headreco --version');
+            if strcmpi(OPTIONS.Method, 'simnibs3')
+                simCmd = 'headreco';
+                simVer = '3.x';
+                if OPTIONS.VertexDensity ~= 0.5
+                    simOpt = ['all --noclean -v ' num2str(OPTIONS.VertexDensity)];
+                else
+                    simOpt = 'all --noclean';
+                end
+            elseif strcmpi(OPTIONS.Method, 'simnibs4')
+                simCmd = 'charm';
+                simVer = '4.x';
+                simOpt = '--forceqform --forcerun';
+            end
+            [status,output] = system([simCmd ' --version']);
             if (status ~= 0)
-                errMsg = [errMsg, 'SimNIBS is not installed or not added to the system path:' 10 'the command "headreco" could not be found.' 10 10 'To install SimNIBS, visit: https://simnibs.github.io/simnibs'];
+                errMsg = [errMsg, 'SimNIBS ' simVer ' is not installed or not added to the system path:' 10 'the command "' simCmd '" could not be found.' 10 10 'To install SimNIBS, visit: https://simnibs.github.io/simnibs'];
                 return;
+            end
+            % Initialize SPM12+CAT12 (required for importing older CAT12 anatomy folder)
+            if strcmpi(OPTIONS.Method, 'simnibs3')
+                [isInstalled, errorMsg, PlugCat] = bst_plugin('Install', 'cat12', isInteractive, 1728);
+                if ~isInstalled
+                    return;
+                end
             end
 
             % ===== VERIFY FIDUCIALS IN T1 MRI =====
@@ -606,34 +758,32 @@ function [isOk, errMsg] = Compute(iSubject, iMris, isInteractive, OPTIONS)
 
             % === SAVE T1 MRI AS NII ===
             bst_progress('text', 'Exporting MRI...');
-            % Empty temporary folder, otherwise it may reuse previous files in the folder
-            gui_brainstorm('EmptyTempFolder');
             % Create temporary folder for segmentation files
-            simnibsDir = bst_fullfile(bst_get('BrainstormTmpDir'), 'simnibs');
-            mkdir(simnibsDir);
+            TmpDir = bst_get('BrainstormTmpDir', 0, simCmd);
+            % Remove previous nifti header, as it can cause issues with SimNIBS (if sform is defined and not qform)
+            sMriT1.Header = [];
             % Save T1 MRI in .nii format
             subjid = strrep(sSubject.Name, '@', '');
-            T1Nii = bst_fullfile(simnibsDir, [subjid 'T1.nii']);
+            T1Nii = bst_fullfile(TmpDir, [subjid 'T1.nii']);
             out_mri_nii(sMriT1, T1Nii);
             % Save T2 MRI in .nii format
             if ~isempty(T2File)
-                T2Nii = bst_fullfile(simnibsDir, [subjid 'T2.nii']);
+                % Remove previous nifti header, as it can cause issues with SimNIBS (if sform is defined and not qform)
+                sMriT2.Header = [];
+                % Save file
+                T2Nii = bst_fullfile(TmpDir, [subjid 'T2.nii']);
                 out_mri_nii(sMriT2, T2Nii);
             else
                 T2Nii = [];
             end
 
             % === CALL SIMNIBS PIPELINE ===
-            bst_progress('text', 'Calling SimNIBS/headreco...');
+            bst_progress('text', ['Calling SimNIBS/' simCmd '...']);
             % Go to simnibs working directory
             curDir = pwd;
-            cd(simnibsDir);
-            % Call headreco
-             if OPTIONS.VertexDensity ~= 0.5
-                strCall = ['headreco all --noclean -v ' num2str(OPTIONS.VertexDensity) ' ' subjid ' '  T1Nii ' ' T2Nii];
-            else % call the default option, where VertexDensity is fixed to 0.5
-                strCall = ['headreco all --noclean  ' subjid ' ' T1Nii ' ' T2Nii];
-            end
+            cd(TmpDir);
+            % Call SimNIBS
+            strCall = [simCmd ' ' simOpt ' ' subjid ' ' T1Nii ' ' T2Nii];
             status = system(strCall)
             % Restore working directory
             cd(curDir);
@@ -645,7 +795,7 @@ function [isOk, errMsg] = Compute(iSubject, iMris, isInteractive, OPTIONS)
             end
                   
             % === IMPORT OUTPUT FOLDER ===
-            [errorImport, FemFile] = import_anatomy_simnibs(iSubject, simnibsDir, OPTIONS.NbVertices, isInteractive, [], 0, 1);
+            [errorImport, FemFile] = import_anatomy_simnibs(iSubject, TmpDir, OPTIONS.NbVertices, isInteractive, [], OPTIONS.isEegCaps, 2);
             % Handle errors
             if ~isempty(errorImport)
                 errMsg = [errMsg, 'Error trying to import the SimNIBS output: ' 10 errorImport];
@@ -700,18 +850,15 @@ function [isOk, errMsg] = Compute(iSubject, iMris, isInteractive, OPTIONS)
             % === SAVE T1 MRI AS NII ===
             bst_progress('setimage', 'plugins/roast_logo.gif');
             bst_progress('text', 'Exporting MRI...');
-            % Empty temporary folder, otherwise it may reuse previous files in the folder
-            gui_brainstorm('EmptyTempFolder');
             % Create temporary folder for fieldtrip segmentation files
-            roastDir = bst_fullfile(bst_get('BrainstormTmpDir'), 'roast');
-            mkdir(roastDir);
+            TmpDir = bst_get('BrainstormTmpDir', 0, 'roast');
             % Save MRI in .nii format
             subjid = strrep(sSubject.Name, '@', '');
-            T1Nii = bst_fullfile(roastDir, [subjid 'T1.nii']);
+            T1Nii = bst_fullfile(TmpDir, [subjid 'T1.nii']);
             out_mri_nii(sMriT1, T1Nii);
             % Save T2 MRI in .nii format
             if ~isempty(T2File)
-                T2Nii = bst_fullfile(roastDir, [subjid 'T2.nii']);
+                T2Nii = bst_fullfile(TmpDir, [subjid 'T2.nii']);
                 out_mri_nii(sMriT2, T2Nii);
                 segTag = '_T1andT2';
             else
@@ -721,7 +868,7 @@ function [isOk, errMsg] = Compute(iSubject, iMris, isInteractive, OPTIONS)
             % === ROAST: SEGMENTATION (SPM) ===
             bst_progress('text', 'ROAST: MRI segmentation (SPM)...');
             % Check for segmented images
-            segNii = bst_fullfile(roastDir, ['c1' subjid 'T1' segTag '.nii']);
+            segNii = bst_fullfile(TmpDir, ['c1' subjid 'T1' segTag '.nii']);
             if file_exist(segNii)
                 disp(['ROAST> SPM segmented MRI found: ' segNii]);
             % ROAST: Start MRI segmentation
@@ -737,7 +884,7 @@ function [isOk, errMsg] = Compute(iSubject, iMris, isInteractive, OPTIONS)
             % === ROAST: SEGMENTATION TOUCHUP ===
             bst_progress('text', 'ROAST: MRI segmentation touchup...');
             % Check for segmented images
-            touchNii = bst_fullfile(roastDir, [subjid 'T1' segTag '_masks.nii']);
+            touchNii = bst_fullfile(TmpDir, [subjid 'T1' segTag '_masks.nii']);
             if file_exist(touchNii)
                 disp(['ROAST> Final masks found: ' touchNii]);
             % ROAST: Start MRI segmentation
@@ -776,7 +923,7 @@ function [isOk, errMsg] = Compute(iSubject, iMris, isInteractive, OPTIONS)
             if ~isempty(iRemove)
                 elem(iRemove,:) = [];
             end
-            % Relabel the air as skin (maybe in the future we may distinguish the aire? to check)
+            % Relabel the air as skin (maybe in the future we may distinguish the air? to check)
             iAir = find(elem(:,end) > 5);
             elem(iAir,:) = 5; 
             % Name tissue labels
@@ -797,7 +944,6 @@ function [isOk, errMsg] = Compute(iSubject, iMris, isInteractive, OPTIONS)
     end
     % Remove logos
     bst_plugin('SetProgressLogo', []);
-
 
     % ===== SAVE FEM MESH =====
     bst_progress('text', 'Saving FEM mesh...');
@@ -832,8 +978,92 @@ function [isOk, errMsg] = Compute(iSubject, iMris, isInteractive, OPTIONS)
     else
         bst_history('add', FemFile, 'process_fem_mesh', OPTIONS);
     end
+
+    % Delete the temporary files
+    if ~isempty(TmpDir)
+        file_delete(TmpDir, 1, 1);
+    end
     % Return success
     isOk = 1;
+end
+
+
+%% ===== GET T1/T2 MRI =====
+% USAGE:  [sSubject, T1File, T2File, errMsg, iT1, iT2] = GetT1T2(iSubject, iMris=[])
+function [sSubject, T1File, T2File, errMsg, iT1, iT2] = GetT1T2(iSubject, iMris)
+    % Initialize returned variables
+    T1File = [];
+    T2File = [];
+    iT1 = [];
+    iT2 = [];
+    errMsg = [];
+    % Parse inputs
+    if (nargin < 2) || isempty(iMris)
+        iMris = [];
+    end
+    % Get subject
+    sSubject = bst_get('Subject', iSubject);
+    if isempty(sSubject)
+        errMsg = 'Subject does not exist.';
+        return
+    end
+    % Check if a MRI is available for the subject
+    if isempty(sSubject.Anatomy)
+        errMsg = ['No MRI available for subject "' sSubject.Name '".'];
+        return
+    end
+    % Get default MRI if not specified
+    if isempty(iMris)
+        iMris = 1:length(sSubject.Anatomy);
+        tryDefaultT2 = 0;
+    else
+        tryDefaultT2 = 1;
+    end
+    % If there are multiple MRIs: order them to put the default one first (probably a T1)
+    if (length(iMris) > 1)
+        % Select the default MRI as the T1
+        if ismember(sSubject.iAnatomy, iMris)
+            iT1 = sSubject.iAnatomy;
+            iMris = iMris(iMris ~= sSubject.iAnatomy);
+        else
+            iT1 = [];
+        end
+        % Find other possible T1
+        if isempty(iT1)
+            iT1 = find(~cellfun(@(c)isempty(strfind(c,'t1')), lower({sSubject.Anatomy(iMris).Comment})));
+            if ~isempty(iT1)
+                iT1 = iMris(iT1(1));
+                iMris = iMris(iMris ~= iT1);
+            end
+        end
+        % Find any possible T2
+        iT2 = find(~cellfun(@(c)isempty(strfind(c,'t2')), lower({sSubject.Anatomy(iMris).Comment})));
+        if ~isempty(iT2)
+            iT2 = iMris(iT2(1));
+            iMris = iMris(iMris ~= iT2);
+        else
+            iT2 = [];
+        end
+        % If not identified yet, use first MRI as T1
+        if isempty(iT1)
+            iT1 = iMris(1);
+            iMris = iMris(2:end);
+        end
+        % If not identified yet, use following MRI as T2
+        if isempty(iT2) && tryDefaultT2
+            iT2 = iMris(1);
+        end
+    else
+        iT1 = iMris(1);
+        iT2 = [];
+    end
+    % Get full file names
+    T1File = file_fullpath(sSubject.Anatomy(iT1).FileName);
+    if ~isempty(iT2)
+        T2File = file_fullpath(sSubject.Anatomy(iT2).FileName);
+    else
+        T2File = [];
+    end
 end
 
 
@@ -846,7 +1076,7 @@ function label = GetFemLabel(label)
         label = 'gray';
     elseif ~isempty(strfind(label, 'csf')) || ~isempty(strfind(label, 'inner'))
         label = 'csf';
-    elseif ~isempty(strfind(label, 'bone')) || ~isempty(strfind(label, 'skull')) || ~isempty(strfind(label, 'outer'))
+    elseif ~isempty(strfind(label, 'bone')) || ~isempty(strfind(label, 'skull')) || (~isempty(strfind(label, 'outer')) && isempty(strfind(label, 'skin')))
         label = 'skull';
     elseif ~isempty(strfind(label, 'skin')) || ~isempty(strfind(label, 'scalp')) || ~isempty(strfind(label, 'head'))
         label = 'scalp';
@@ -865,35 +1095,108 @@ function ComputeInteractive(iSubject, iMris, BemFiles) %#ok<DEFNU>
     end
     % Get default options
     OPTIONS = GetDefaultOptions();
+    OPTIONS.BemFiles = BemFiles;
     % If BEM surfaces are selected, the only possible method is "iso2mesh"
     if ~isempty(BemFiles) && iscell(BemFiles)
-        OPTIONS.Method = 'iso2mesh';
-        OPTIONS.BemFiles = BemFiles;
-    % Otherwise: Ask for method to use
+        FemMethods = {'Iso2mesh-2021','Iso2mesh'};
+        DefMethod = 'Iso2mesh-2021';
+    % More than 2 MRI selected: error
+    elseif (length(iMris) > 2)
+        bst_error('Too many volumes selected.', 'FEM mesh', 0);
+        return
+    % If multiple MRIs are selected, iso2mesh/FieldTrip not possible
+    elseif (length(iMris) == 2)
+        FemMethods = {'Brain2mesh','SimNIBS3','SimNIBS4','ROAST'};
+        DefMethod = 'SimNIBS4';
+    % One MRI selected, iso2mesh not possible
+    elseif (length(iMris) == 1)
+        FemMethods = {'Brain2mesh','SimNIBS3','SimNIBS4','ROAST','FieldTrip'};
+        DefMethod = 'SimNIBS4';
+    % Otherwise: Use the defaults from the folder: Ask for method to use
     else
-        res = java_dialog('question', [...
-            '<HTML><B>Iso2mesh</B>:<BR>Call iso2mesh to create a tetrahedral mesh from the <B>BEM surfaces</B><BR>' ...
-            'generated with Brainstorm (head, inner skull, outer skull).<BR>' ...
-            '<FONT COLOR="#707070"><I>Iso2mesh is downloaded and installed automatically when needed.</I></FONT><BR><BR>' ...
-            '<B>Brain2mesh</B>:<BR>Segment the <B>T1</B> (and <B>T2</B>) <B>MRI</B> with SPM12, mesh with Brain2Mesh.<BR>' ...
-            'Brain2Mesh is downloaded and installed automatically by Brainstorm.<BR>' ...
-            '<FONT COLOR="#707070"><I>Brain2mesh and SPM12 are downloaded and installed automatically when needed.</I></FONT><BR><BR>' ...
-            '<B>SimNIBS</B>:<BR>Call SimNIBS to segment and mesh the <B>T1</B> (and <B>T2</B>) <B>MRI</B>.<BR>' ...
-            '<FONT COLOR="#707070"><I>SimNIBS must be installed on the computer first.<BR>' ...
-            'Website: https://simnibs.github.io/simnibs</I></FONT><BR><BR>' ...
-             '<B>ROAST</B>:<BR>Call ROAST to segment and mesh the <B>T1</B> (and <B>T2</B>) MRI.<BR>' ...
-            '<FONT COLOR="#707070"><I>ROAST is downloaded and installed automatically when needed.</I></FONT><BR><BR>'...
-            '<B>FieldTrip</B>:<BR>Call FieldTrip to segment and mesh the <B>T1</B> MRI.<BR>' ...
-            '<FONT COLOR="#707070"><I>FieldTrip is downloaded and installed automatically when needed.</I></FONT><BR><BR>' ...
-            ], 'FEM mesh generation method', [], {'Iso2mesh','Brain2Mesh','SimNIBS','ROAST','FieldTrip'}, 'Iso2mesh');
+        FemMethods = {'Iso2mesh-2021','Iso2mesh','Brain2mesh','SimNIBS3','SimNIBS4','ROAST','FieldTrip'};
+        DefMethod = 'Iso2mesh-2021';
+    end
+    
+    % Only one method: use it
+    if (length(FemMethods) == 1)
+        OPTIONS.Method = lower(FemMethods{1});
+    % More than one method available: ask the user
+    else
+        % Assemble description of methods
+        strQuestion = '<HTML>';
+        for i = 1:length(FemMethods)
+            switch (FemMethods{i})
+                case 'Iso2mesh-2021'
+                    strQuestion = [strQuestion, ...
+                        '<B>Iso2mesh-2021</B>:<BR>Call iso2mesh to create a tetrahedral mesh from the <B>BEM surfaces</B><BR>' ...
+                        'generated with Brainstorm (head, inner skull, outer skull).<BR>' ...
+                        '<FONT COLOR="#707070"><I>Iso2mesh is downloaded automatically as a plugin.</I></FONT><BR><BR>'];
+                case 'Iso2mesh'
+                    strQuestion = [strQuestion, ...
+                        '<B>Iso2mesh</B>:<BR>Previous version of this method (useful in case the new one fails).<BR><BR>'];
+                case 'Brain2mesh'
+                    strQuestion = [strQuestion, ...
+                        '<B>Brain2mesh</B>:<BR>Segment the <B>T1</B> (and <B>T2</B>) <B>MRI</B> with SPM12, mesh with Brain2mesh.<BR>' ...
+                        '<FONT COLOR="#707070"><I>Brain2mesh and SPM12 are downloaded automatically as plugins.</I></FONT><BR><BR>'];
+                case 'SimNIBS3'
+                    strQuestion = [strQuestion, ...
+                        '<B>SimNIBS3</B>:<BR>Call SimNIBS/headreco to segment and mesh the <B>T1</B> (and <B>T2</B>) <B>MRI</B>.<BR>' ...
+                        '<FONT COLOR="#707070"><I>SimNIBS 3.x must be installed on the computer first.<BR>' ...
+                        'Website: https://simnibs.github.io/simnibs</I></FONT><BR><BR>'];
+                case 'SimNIBS4'
+                    strQuestion = [strQuestion, ...
+                        '<B>SimNIBS4</B>:<BR>Call SimNIBS/charm to segment and mesh the <B>T1</B> (and <B>T2</B>) <B>MRI</B>.<BR>' ...
+                        '<FONT COLOR="#707070"><I>SimNIBS 4.x must be installed on the computer first.<BR>' ...
+                        'Website: https://simnibs.github.io/simnibs</I></FONT><BR><BR>'];
+                case 'ROAST'
+                    strQuestion = [strQuestion, ...
+                        '<B>ROAST</B>:<BR>Call ROAST to segment and mesh the <B>T1</B> (and <B>T2</B>) MRI.<BR>' ...
+                        '<FONT COLOR="#707070"><I>ROAST is downloaded automatically as a plugin.</I></FONT><BR><BR>'];
+                case 'FieldTrip'
+                    strQuestion = [strQuestion, ...
+                        '<B>FieldTrip</B>:<BR>Call FieldTrip to segment and mesh the <B>T1</B> MRI.<BR>' ...
+                        '<FONT COLOR="#707070"><I>FieldTrip is downloaded automatically as a plugin.</I></FONT><BR><BR>'];
+            end
+        end
+        % Ask the user to select a method
+        res = java_dialog('question', strQuestion, 'FEM mesh generation method', [], FemMethods, DefMethod);
         if isempty(res)
             return
         end
         OPTIONS.Method = lower(res);
     end
-    
+
     % Other options: Switch depending on the method
     switch (OPTIONS.Method)
+        case 'iso2mesh-2021'
+            % Ask merging method
+            res = java_dialog('question', [...
+                '<HTML>Iso2mesh function used to merge the input surfaces:<BR><BR>', ...
+                '<B>MergeMesh</B>: Default option (faster).<BR>' ...
+                'Simply concatenates the meshes without any intersection checks.<BR><BR>' ...
+                '<B>MergeSurf</B>: Advanced option (slower).<BR>' ...
+                'Concatenates and checks for intersections, split intersecting elements.<BR><BR>' ...
+                ], 'FEM mesh generation (Iso2mesh)', [], {'MergeMesh','MergeSurf'}, 'MergeMesh');
+            if isempty(res)
+                return
+            end
+            OPTIONS.MergeMethod = lower(res);
+            % Ask BEM meshing options
+            res = java_dialog('input', {['Max tetrahedral volume (in cm^3) (10=coarse, 0.0001=fine):'], 'Percentage of elements kept (1-100%):'}, ...
+                'FEM mesh', [], {num2str(OPTIONS.MaxVol), num2str(OPTIONS.KeepRatio)});
+            if isempty(res)
+                return
+            end
+            % Get new values
+            OPTIONS.MaxVol    = str2num(res{1});
+            OPTIONS.KeepRatio = str2num(res{2}) ./ 100;
+            if isempty(OPTIONS.MaxVol) || (OPTIONS.MaxVol < 0.000001) || (OPTIONS.MaxVol > 20) || ...
+                    isempty(OPTIONS.KeepRatio) || (OPTIONS.KeepRatio < 0.01) || (OPTIONS.KeepRatio > 1)
+                bst_error('Invalid options.', 'FEM mesh', 0);
+                return
+            end
+            
         case 'iso2mesh'
             % Ask merging method
             res = java_dialog('question', [...
@@ -908,7 +1211,7 @@ function ComputeInteractive(iSubject, iMris, BemFiles) %#ok<DEFNU>
             end
             OPTIONS.MergeMethod = lower(res);
             % Ask BEM meshing options
-            res = java_dialog('input', {'Max tetrahedral volume (10=coarse, 0.0001=fine):', 'Percentage of elements kept (1-100%):'}, ...
+            res = java_dialog('input', {'Max tetrahedral volume (in cm^3) (10=coarse, 0.0001=fine):', 'Percentage of elements kept (1-100%):'}, ...
                 'FEM mesh', [], {num2str(OPTIONS.MaxVol), num2str(OPTIONS.KeepRatio)});
             if isempty(res)
                 return
@@ -925,7 +1228,7 @@ function ComputeInteractive(iSubject, iMris, BemFiles) %#ok<DEFNU>
         case 'brain2mesh'
             % No extra options
             
-        case 'simnibs'    
+        case 'simnibs3'
             % Ask for the Vertex density
             res = java_dialog('input', '<HTML>Vertex density:<BR>Number of nodes per mm2 of the surface meshes (0.1 - 1.5)', ...
                 'SimNIBS Vertex Density', [], num2str(OPTIONS.VertexDensity));
@@ -939,6 +1242,18 @@ function ComputeInteractive(iSubject, iMris, BemFiles) %#ok<DEFNU>
                 return
             end
             OPTIONS.NbVertices = str2double(res);
+            % Import EEG caps and thickness maps
+            OPTIONS.isEegCaps = java_dialog('confirm', ['Import cortical thickness maps and default EEG caps?' 10 10], 'Import extra information');
+
+        case 'simnibs4'
+            % Ask number of vertices
+            res = java_dialog('input', 'Number of vertices on the cortex surface:', 'Import SimNIBS folder', [], '15000');
+            if isempty(res)
+                return
+            end
+            OPTIONS.NbVertices = str2double(res);
+            % Import EEG caps
+            OPTIONS.isEegCaps = java_dialog('confirm', ['Import default EEG caps generated by SimNIBS?' 10 10], 'Import EEG caps');
 
         case 'fieldtrip'
             % Ask user for the downsampling factor

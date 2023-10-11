@@ -5,7 +5,7 @@ function varargout = process_split_raw_file( varargin )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -226,8 +226,12 @@ function [sFileOut, iFile, sOutputFiles] = SaveBlock(SamplesBounds, ...
             if ~isempty(sOutMat.F.events(iEvent).reactTimes)
                 sOutMat.F.events(iEvent).reactTimes = sOutMat.F.events(iEvent).reactTimes(iKeepEvents);
             end
-            sOutMat.F.events(iEvent).channels = sOutMat.F.events(iEvent).channels(iKeepEvents);
-            sOutMat.F.events(iEvent).notes    = sOutMat.F.events(iEvent).notes(iKeepEvents);
+            if ~isempty(sOutMat.F.events(iEvent).channels)
+                sOutMat.F.events(iEvent).channels = sOutMat.F.events(iEvent).channels(iKeepEvents);
+            end
+            if ~isempty(sOutMat.F.events(iEvent).notes)
+                sOutMat.F.events(iEvent).notes = sOutMat.F.events(iEvent).notes(iKeepEvents);
+            end
         end
 
         % Save new file

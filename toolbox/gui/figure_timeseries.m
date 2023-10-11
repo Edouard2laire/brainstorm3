@@ -20,7 +20,7 @@ function varargout = figure_timeseries( varargin )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -34,7 +34,7 @@ function varargout = figure_timeseries( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2008-2020
+% Authors: Francois Tadel, 2008-2021
 %          Martin Cousineau, 2017
 %          Marc Lalancette, 2020
 
@@ -799,7 +799,7 @@ function DrawTimeSelection(hFig)
                 YData = YData ./ Handles.DisplayFactor;
                 % Get units
                 Fmax = max(abs(Handles.DataMinMax));
-                [tmp, Yfactor, YUnits] = bst_getunits( Fmax, GlobalData.DataSet(iDS).Figure(iFig).Id.Modality, TsInfo.FileName );
+                [tmp, Yfactor, YUnits] = bst_getunits( Fmax, GlobalData.DataSet(iDS).Figure(iFig).Id.Modality, TsInfo.FileName, TsInfo.DisplayUnits );
                 % Apply the display units
                 YData = YData .* Yfactor;
         end
@@ -870,13 +870,13 @@ function DrawTimeSelection(hFig)
             % Get selection label
             hTextTimeSel = findobj(hFig, '-depth', 1, 'Tag', 'TextTimeSel');
             if ~isempty(hTextTimeSel)
-                % Format string
+                % Format string: Selection
                 strMin = panel_time('FormatValue', min(GraphSelection), timeUnit, precision);
                 strMax = panel_time('FormatValue', max(GraphSelection), timeUnit, precision);
                 strSelection = ['Selection: [' strMin ' ' timeUnit ', ' strMax ' ' timeUnit ']'];
-                strLength = sprintf('      Duration: [%d ms]', round(abs(GraphSelection(2) - GraphSelection(1)) * 1000));
-                
-                
+                % Format string: Duration
+                strDur = panel_time('FormatValue', max(abs(GraphSelection(2) - GraphSelection(1))), timeUnit, precision);
+                strLength = sprintf('      Duration: [%s %s]', strDur, timeUnit);
                 % Update label
                 set(hTextTimeSel, 'Visible', 'on', 'String', [strSelection, strLength, strMinMax]);
             end
@@ -1066,11 +1066,15 @@ function FigureZoom(hFig, direction, Factor, center)
             % Start by displaying the full resolution if necessary
             [hFig, iFig, iDS] = bst_figures('GetFigure', hFig);
             if (GlobalData.DataSet(iDS).Figure(iFig).Handles(1).DownsampleFactor > 1)
-                set(hFig, 'Pointer', 'watch');
-                drawnow;
-                GlobalData.DataSet(iDS).Figure(iFig).Handles(1).DownsampleFactor = 1;
-                figure_timeseries('PlotFigure', iDS, iFig, [], [], 1);
-                set(hFig, 'Pointer', 'arrow');
+                if ~isempty(GlobalData.DataSet(iDS).DataFile)
+                    set(hFig, 'Pointer', 'watch');
+                    drawnow;
+                    GlobalData.DataSet(iDS).Figure(iFig).Handles(1).DownsampleFactor = 1;
+                    figure_timeseries('PlotFigure', iDS, iFig, [], [], 1);
+                    set(hFig, 'Pointer', 'arrow');
+                else
+                    disp('BST> Warning: Cannot reload file with full resolution.');
+                end
             end
             % Get current time frame
             hCursor = findobj(hAxes(1), '-depth', 1, 'Tag', 'Cursor');
@@ -1327,6 +1331,7 @@ function ResizeCallback(hFig, ev)
     hButtonGainMinus     = findobj(hFig, '-depth', 1, 'Tag', 'ButtonGainMinus');
     hButtonGainPlus      = findobj(hFig, '-depth', 1, 'Tag', 'ButtonGainPlus');
     hButtonAutoScale     = findobj(hFig, '-depth', 1, 'Tag', 'ButtonAutoScale');
+    hButtonFlipY         = findobj(hFig, '-depth', 1, 'Tag', 'ButtonFlipY');
     hButtonMenu          = findobj(hFig, '-depth', 1, 'Tag', 'ButtonMenu');
     hButtonZoomDown      = findobj(hFig, '-depth', 1, 'Tag', 'ButtonZoomDown');
     hButtonZoomMinus     = findobj(hFig, '-depth', 1, 'Tag', 'ButtonZoomMinus');
@@ -1342,11 +1347,14 @@ function ResizeCallback(hFig, ev)
         set(hButtonGainMinus, 'Position', [figPos(3)-butSize-1, 2*butSize, butSize, butSize]);
         set(hButtonGainPlus,  'Position', [figPos(3)-butSize-1, 3*butSize, butSize, butSize]);
     end
+    if ~isempty(hButtonFlipY)
+        set(hButtonFlipY, 'Position', [figPos(3)-butSize-1, 4.5*butSize, butSize, butSize]);
+    end
     if ~isempty(hButtonAutoScale)
-        set(hButtonAutoScale, 'Position', [figPos(3)-butSize-1, 5*butSize, butSize, butSize]);
+        set(hButtonAutoScale, 'Position', [figPos(3)-butSize-1, 5.5*butSize, butSize, butSize]);
     end
     if ~isempty(hButtonMenu)
-        set(hButtonMenu, 'Position', [figPos(3)-butSize-1, 6*butSize, butSize, butSize]);
+        set(hButtonMenu, 'Position', [figPos(3)-butSize-1, 6.5*butSize, butSize, butSize]);
     end
     if ~isempty(hButtonZoomUp)
         set(hButtonZoomDown,  'Position', [figPos(3)-butSize-1, 8*butSize, butSize, butSize]);
@@ -1438,7 +1446,7 @@ function FigureKeyPressedCallback(hFig, ev)
                         % Get study
                         [sStudy, iStudy, iData] = bst_get('DataFile', DataFile);
                         % Change status
-                        process_detectbad('SetTrialStatus', DataFile, ~sStudy.Data(iData).BadTrial);
+                        SetTrialStatus(hFig, DataFile, ~sStudy.Data(iData).BadTrial);
                     case 'raw'
                         panel_record('RejectTimeSegment');
                 end
@@ -1653,7 +1661,7 @@ function FigureKeyPressedCallback(hFig, ev)
                                     % Look for last page event marked (after the current one)
                                     for i = 1:length(pageEventNames)
                                         [sEvent, iEvent] = panel_record('GetEvents', pageEventNames{i});
-                                        if ~isempty(sEvent) && ~isempty(sEvent.times) && (pageEnd < sEvent.times(2,end))
+                                        if ~isempty(sEvent) && ~isempty(sEvent.times) && (size(sEvent.times,2) == 2) && (pageEnd < sEvent.times(2,end))
                                             pageEnd = sEvent.times(2,end);
                                             iLastEvent = iEvent;
                                             iLastOccur = size(sEvent.times, 2);
@@ -2198,6 +2206,12 @@ function DisplayFigurePopup(hFig, menuTitle, curTime, selChan)
         elseif strcmpi(sFile.format, 'EEG-SMRX') && isfield(sFile.header, 'timedate')
             t = sFile.header.timedate;
             dateTitle = [datestr(datenum(t(7), t(6), t(5), t(4), t(3), t(2)), 'dd-mmm-yyyy HH:MM:SS'), '.', num2str(floor(1000 * (GlobalData.UserTimeWindow.CurrentTime - floor(GlobalData.UserTimeWindow.CurrentTime))), '%03d')];
+        % Micromed TRC: Wall clock time
+        elseif strcmpi(sFile.format, 'EEG-MICROMED') && isfield(sFile.header, 'acquisition') && isfield(sFile.header.acquisition, 'sec')
+            acq = sFile.header.acquisition;
+            dstart = datenum(acq.year, acq.month, acq.day, acq.hour, acq.min, acq.sec);
+            dcur   = datenum(0, 0, 0, 0, 0, floor(GlobalData.UserTimeWindow.CurrentTime));
+            dateTitle = [datestr(dstart + dcur, 'dd-mmm-yyyy HH:MM:SS'), '.', num2str(floor(1000 * (GlobalData.UserTimeWindow.CurrentTime - floor(GlobalData.UserTimeWindow.CurrentTime))), '%03d')];
         end
     end
     % Menu title
@@ -2293,9 +2307,9 @@ function DisplayFigurePopup(hFig, menuTitle, curTime, selChan)
         % === SET TRIAL GOOD/BAD ===
         if strcmpi(GlobalData.DataSet(iDS).Measures.DataType, 'recordings')
             if (sStudy.Data(iData).BadTrial == 0)
-                jItem = gui_component('MenuItem', jPopup, [], 'Reject trial', IconLoader.ICON_BAD, [], @(h,ev)process_detectbad('SetTrialStatus', DataFile, 1));
+                jItem = gui_component('MenuItem', jPopup, [], 'Reject trial', IconLoader.ICON_BAD, [], @(h,ev)SetTrialStatus(hFig, DataFile, 1));
             else
-                jItem = gui_component('MenuItem', jPopup, [], 'Accept trial', IconLoader.ICON_GOOD, [], @(h,ev)process_detectbad('SetTrialStatus', DataFile, 0));
+                jItem = gui_component('MenuItem', jPopup, [], 'Accept trial', IconLoader.ICON_GOOD, [], @(h,ev)SetTrialStatus(hFig, DataFile, 0));
             end
             jItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_B, KeyEvent.CTRL_MASK));
         end    
@@ -2601,7 +2615,7 @@ function DisplayConfigMenu(hFig, jParent)
         if strcmpi(FigureId.Type, 'Spectrum')
             TfInfo = getappdata(hFig, 'Timefreq');
             sOptions = panel_display('GetDisplayOptions');
-            if ismember(TfInfo.Function, {'power', 'magnitude'})
+            if ismember(TfInfo.Function, {'power', 'magnitude', 'log'})
                 jScalePow = gui_component('RadioMenuItem', jMenu, [], 'Power', [], [], @(h,ev)panel_display('SetDisplayFunction', 'power'));
                 jScaleMag = gui_component('RadioMenuItem', jMenu, [], 'Magnitude', [], [], @(h,ev)panel_display('SetDisplayFunction', 'magnitude'));
                 jScaleLog = gui_component('RadioMenuItem', jMenu, [], 'Log(power)', [], [], @(h,ev)panel_display('SetDisplayFunction', 'log'));
@@ -2724,9 +2738,16 @@ function DisplayConfigMenu(hFig, jParent)
                             matlabMouse(2) - matlabFig(2) - matlabButton(2) - matlabButton(4) + 1];
             % Move popup accordingly
             ScreenDef = bst_get('ScreenDef');
+            if (length(ScreenDef) == 1)
+                ZoomFactor = ScreenDef(1).zoomFactor;
+            elseif (matlabFig(1) < ScreenDef(1).matlabPos(1) + ScreenDef(1).matlabPos(3))
+                ZoomFactor = ScreenDef(1).zoomFactor;
+            else
+                ZoomFactor = ScreenDef(2).zoomFactor;
+            end
             jPopup.setLocation(java.awt.Point(...
-                javaMouse.getX() - matlabOffset(1).*ScreenDef.zoomFactor - jPopup.getWidth(), ...
-                javaMouse.getY() + matlabOffset(2).*ScreenDef.zoomFactor));
+                javaMouse.getX() - matlabOffset(1).*ZoomFactor - jPopup.getWidth(), ...
+                javaMouse.getY() + matlabOffset(2).*ZoomFactor));
         end
     end
 end
@@ -3166,6 +3187,8 @@ function isOk = PlotFigure(iDS, iFig, F, TimeVector, isFastUpdate, Std)
         set(PlotHandles(1).hColumnScale, 'Visible', 'off');
         cla(PlotHandles(1).hColumnScale);
     end
+
+    % X axis scale
     if ~isfield(TsInfo, 'XScale')
         TsInfo.XScale = 'linear';
         setappdata(hFig, 'TsInfo', TsInfo);
@@ -3284,17 +3307,20 @@ function PlotHandles = PlotAxes(iDS, hAxes, PlotHandles, TimeVector, F, TsInfo, 
     % Detect optimal downsample factor
     elseif ~isFastUpdate || isempty(PlotHandles.DownsampleFactor)
         % Get number of pixels in the axes
-        figPos = get(get(hAxes,'Parent'), 'Position');
-        % Keep 5 values per pixel
-        PlotHandles.DownsampleFactor = max(1, floor(length(TimeVector) / (figPos(3) -50) / DownsampleTimeSeries));
+        % figPos = get(get(hAxes,'Parent'), 'Position');
+        % nPixels = figPos(3) -50;
+        % Keep 5 values per pixel, and consider axes of 2000 pixels
+        nPixels = 2000;
+        PlotHandles.DownsampleFactor = max(1, floor(length(TimeVector) / nPixels / DownsampleTimeSeries));
     end
     % Downsample time series
-    if (PlotHandles.DownsampleFactor > 1)
+    if (PlotHandles.DownsampleFactor > 1) && ~isempty(GlobalData.DataSet(iDS).DataFile)
         TimeVector = TimeVector(1:PlotHandles.DownsampleFactor:end);
         F = F(:,1:PlotHandles.DownsampleFactor:end);
         if ~isempty(Std)
             Std = Std(:,1:PlotHandles.DownsampleFactor:end,:,:);
         end
+        disp(['BST> Warning: Downsampling signals for display (keeping 1 value every ' num2str(PlotHandles.DownsampleFactor) ')']);
     end
 
     % ===== SWITCH DISPLAY MODE =====
@@ -3442,9 +3468,13 @@ function PlotHandles = PlotAxesButterfly(iDS, hAxes, PlotHandles, TsInfo, TimeVe
     % ===== YLIM =====
     % Get data units
     Fmax = max(abs(PlotHandles.DataMinMax));
-    [fScaled, fFactor, fUnits] = bst_getunits( Fmax, TsInfo.Modality, TsInfo.FileName );
+    [fScaled, fFactor, fUnits] = bst_getunits( Fmax, TsInfo.Modality, TsInfo.FileName, TsInfo.DisplayUnits);
+
     % Plot factor has changed
     isFactorChanged = ~isequal(fFactor, PlotHandles.DisplayFactor);
+    if isFactorChanged && ~isempty(GlobalData.DataSet(iDS).Measures.DisplayUnits)
+        GlobalData.DataSet(iDS).Measures.DisplayUnits = fUnits;
+    end
     % Set display Factor
     PlotHandles.DisplayFactor = fFactor;
     PlotHandles.DisplayUnits  = fUnits;
@@ -3613,11 +3643,12 @@ function PlotHandles = PlotAxesButterfly(iDS, hAxes, PlotHandles, TsInfo, TimeVe
     end
     
     % ===== DISPLAY GFP =====
+    % GFP reference: https://link.springer.com/article/10.1007/BF01128870
     % If there are more than 5 channel
     if bst_get('DisplayGFP') && ~strcmpi(GlobalData.DataSet(iDS).Measures.DataType, 'stat') ...
                              && (GlobalData.DataSet(iDS).Measures.NumberOfSamples > 2) && (size(F,1) > 5) ...
-                             && ~isempty(TsInfo.Modality) && ~strcmpi(TsInfo.Modality, 'sources') && ~strcmpi(TsInfo.Modality, 'results') && ~strcmpi(TsInfo.Modality, 'sloreta') && (TsInfo.Modality(1) ~= '$')
-        GFP = sqrt(sum((F * fFactor).^2, 1));
+                             && ~isempty(TsInfo.Modality) && ismember(TsInfo.Modality, {'EEG','MEG','EEG','SEEG'})
+        GFP = std(F * fFactor, 1);
         PlotGFP(hAxes, TimeVector, GFP, TsInfo.FlipYAxis, isFastUpdate);
     end
 end
@@ -3883,13 +3914,21 @@ function UpdateScaleBar(iDS, iFig, TsInfo)
     % Get axes zoom factor
     YLim = get(PlotHandles.hAxes, 'YLim');
     zoomFactor = YLim(2) - YLim(1);  % /(1-0)
+    % Get montage: ICA/SSP montages displayed with no units
+    if ~isempty(TsInfo.MontageName)
+        if strcmpi(TsInfo.MontageName, 'ICA components[tmp]')
+            Modality = 'ICA';
+        elseif strcmpi(TsInfo.MontageName, 'SSP components[tmp]')
+            Modality = 'SSP';
+        end
+    end
     % Get data units
     Fmax = max(abs(PlotHandles.DataMinMax));
-    [fScaled, fFactor, fUnits] = bst_getunits( Fmax, Modality, TsInfo.FileName );
+    [fScaled, fFactor, fUnits] = bst_getunits( Fmax, Modality, TsInfo.FileName, TsInfo.DisplayUnits );
     barMeasure = fScaled / TsInfo.DefaultFactor;
     % Get position where to plot the legend
     nChan = length(PlotHandles.hLines);
-    centerOffset = PlotHandles.ChannelOffsets(min(2,nChan)) + 1/(nChan+2)/2;
+    centerOffset = PlotHandles.ChannelOffsets(1) + 1/(nChan+2)/2;
     % Plot bar for the maximum amplitude
     xBar = .3;
     yBar = centerOffset + 1/(nChan+2) * [-0.5, 0.5] / zoomFactor;
@@ -3905,12 +3944,13 @@ function UpdateScaleBar(iDS, iFig, TsInfo)
          'Color',   'k', ... 
          'Tag',     'ColumnScaleBar', ...
          'Parent',  PlotHandles.hColumnScale);
-    % Plot data units
+    % Print amplitude and units
     if barMeasure < 10
       txtAmp = sprintf('%1.1f %s', barMeasure, fUnits);
     else
       txtAmp = sprintf('%d %s', round(barMeasure), fUnits);
     end
+    % Plot text: data vaules + units + Y direction
     if ~isempty(PlotHandles.hColumnScaleText) && ishandle(PlotHandles.hColumnScaleText)
         set(PlotHandles.hColumnScaleText, 'String', txtAmp);
     else
@@ -3969,6 +4009,13 @@ function CreateScaleButtons(iDS, iFig)
     h10 = bst_javacomponent(hFig, 'button', [], [], IconLoader.ICON_SCROLL_DOWN, ...
         '<HTML><TABLE><TR><TD>Scroll down</TD></TR><TR><TD><B> &nbsp; [Right+left click + Mouse down]<BR> &nbsp; [Middle click + Mouse down]</B></TD></TR></TABLE>', ...
         @(h,ev)FigurePan(hFig, [0, .9]), 'ButtonZoomDown');
+    % Flip Y axis
+    if TsInfo.FlipYAxis
+        iconFlipY = IconLoader.ICON_Y_DOWN;
+    else
+        iconFlipY = IconLoader.ICON_Y_UP;
+    end
+    h11 = bst_javacomponent(hFig, 'button', [], [], iconFlipY, 'Flip Y axis', @(h,ev)SetProperty(hFig, 'FlipYAxis'), 'ButtonFlipY');
     % Visible / not visible
     if isRaw
         set([h1 h2], 'Visible', 'off');
@@ -4007,7 +4054,7 @@ function SetScaleY(iDS, iFig, newScale)
     drawnow;
     % Get units
     Fmax = max(abs(PlotHandles.DataMinMax));
-    [fScaled, fFactor, fUnits] = bst_getunits( Fmax, Modality, TsInfo.FileName );
+    [fScaled, fFactor, fUnits] = bst_getunits( Fmax, Modality, TsInfo.FileName, TsInfo.DisplayUnits );
     strUnits = strrep(fUnits, '\mu', '&mu;');
     
     % Columns
@@ -4150,7 +4197,7 @@ function SetResolution(iDS, iFig, newResX, newResY)
     isRaw = strcmpi(GlobalData.DataSet(iDS).Measures.DataType, 'raw');
      % Get units
     Fmax = max(abs(Figure.Handles.DataMinMax));
-    [fScaled, fFactor, fUnits] = bst_getunits( Fmax, Figure.Id.Modality, TsInfo.FileName );
+    [fScaled, fFactor, fUnits] = bst_getunits( Fmax, Figure.Id.Modality, TsInfo.FileName, TsInfo.DisplayUnits );
     strUnits = strrep(fUnits, '\mu', '&mu;');
     % Get current time resolution
     XLim = get(hAxes, 'XLim');
@@ -4299,7 +4346,7 @@ function ScaleToFitY(hFig, ev)
     FigureId = getappdata(hFig, 'FigureId');
     isSpectrum = strcmpi(FigureId.Type, 'spectrum');
     [PlotHandles, iFig, iDS] = bst_figures('GetFigureHandles', hFig);
-    hAxes = PlotHandles.hAxes;
+    hAxes = [PlotHandles(:).hAxes];
     % Get initial YLim
     YLimInit = getappdata(hAxes(1), 'YLimInit');
 
@@ -4335,14 +4382,30 @@ function ScaleToFitY(hFig, ev)
                 TF = reshape(TF(:,1,:), [size(TF,1), size(TF,3)]);
         end
     else
-        TF = GetFigureData(iDS, iFig);
-        TF = TF{1};
+        TF = [];
+        switch file_gettype(TsInfo.FileName)
+            case 'data'
+                TF = GetFigureData(iDS, iFig);
+                TF = TF{1};
+            case 'matrix'
+                sMatrix = in_bst_matrix(TsInfo.FileName, 'Value');
+                TF = sMatrix.Value;
+        end
+        if isempty(TF)
+           % Get the Y data from all Axes
+            for ix = 1 : length(hAxes)
+                dataLineObjs = findobj(hAxes(ix), 'Tag', 'DataLine');
+                TF = vertcat(TF, vertcat(get(dataLineObjs, 'YData')));
+            end
+            % Correct for display factor
+            TF = TF ./ PlotHandles(1).DisplayFactor;
+        end
         [XVector, iTime] = bst_memory('GetTimeVector', iDS, [], 'UserTimeWindow');
         XVector = XVector(iTime);
     end
     
     % Get limits of currently plotted data
-    XLim = get(hAxes, 'XLim');    
+    XLim = get(hAxes(1), 'XLim');
     % For linear y axis spectrum, ignore very low frequencies with high amplitudes. Use the first local maximum
     if isSpectrum && ~isequal(lower(FigureId.SubType), 'timeseries') && ~isBands && ...
             any(strcmpi(TfInfo.Function, {'power', 'magnitude'})) && strcmpi(TsInfo.YScale, 'linear') && all(TF(:)>=0)
@@ -4358,15 +4421,15 @@ function ScaleToFitY(hFig, ev)
     iStart = max(iStartMin, iStart);
     [val, iEnd] = min(abs(XVector - XLim(2)));
     curTF = TF(:, iStart:iEnd);
-    isYLog = strcmpi(TsInfo.YScale, 'log');
+    isYLog = isfield(TsInfo, 'YScale') && strcmpi(TsInfo.YScale, 'log');
     if isYLog
-        YLim = [min(curTF(:)), max(curTF(:))] * PlotHandles.DisplayFactor;
+        YLim = [min(curTF(:)), max(curTF(:))] * PlotHandles(1).DisplayFactor;
         if YLim(1) <= 0
-            YLim(1) = min(curTF(curTF(:)>0)) * PlotHandles.DisplayFactor;
+            YLim(1) = min(curTF(curTF(:)>0)) * PlotHandles(1).DisplayFactor;
         end
         YLim = log10(YLim);
     else
-        YLim = [min(curTF(:)), max(curTF(:))] * PlotHandles.DisplayFactor;
+        YLim = [min(curTF(:)), max(curTF(:))] * PlotHandles(1).DisplayFactor;
     end
     % Add 5% margin above and below
     YSpan = YLim(2) - YLim(1);
@@ -4375,22 +4438,32 @@ function ScaleToFitY(hFig, ev)
     if isYLog
         YLim = 10.^YLim;
     end
+    % Keep YLim(1) as 0 if it was initially 0
+    if YLimInit(1) == 0
+        YLim(1) = 0;
+    end
+    % Keep YLim symmetric if it was initially symmetric
+    if YLimInit(1) == -YLimInit(2)
+        [tmp, imax] = max(abs(YLim));
+        [tmp, imin] = min(abs(YLim));
+        YLim(imin) = -YLim(imax);
+    end
     % Respect data limits
     if isSpectrum 
         if ~isempty(YLimInit) && YLimInit(1) ~= YLimInit (2)
             YLim(1) = max(YLim(1), YLimInit(1));
             YLim(2) = min(YLim(2), YLimInit(2));
-        elseif PlotHandles.DataMinMax(1) ~= PlotHandles.DataMinMax(2)
-            YLim(1) = max(YLim(1), PlotHandles.DataMinMax(1) * PlotHandles.DisplayFactor);
-            YLim(2) = min(YLim(2), PlotHandles.DataMinMax(2) * PlotHandles.DisplayFactor);
+        elseif PlotHandles(1).DataMinMax(1) ~= PlotHandles(1).DataMinMax(2)
+            YLim(1) = max(YLim(1), PlotHandles(1).DataMinMax(1) * PlotHandles(1).DisplayFactor);
+            YLim(2) = min(YLim(2), PlotHandles(1).DataMinMax(2) * PlotHandles(1).DisplayFactor);
         end
     end
     % Catch exceptions
     if YLim(1) == YLim (2)
         if ~isempty(YLimInit) && YLimInit(1) ~= YLimInit (2)
             YLim = YLimInit;
-        elseif PlotHandles.DataMinMax(1) ~= PlotHandles.DataMinMax(2)
-            YLim = PlotHandles.DataMinMax;
+        elseif PlotHandles(1).DataMinMax(1) ~= PlotHandles(1).DataMinMax(2)
+            YLim = PlotHandles(1).DataMinMax;
         else
             YLim = [-1, 1];
         end
@@ -4772,7 +4845,11 @@ function PlotEventsDots_EventsBar(hFig)
             end
         end
         iOccChannels = find(~cellfun(@isempty, iLines));
-        iOccGlobal = find(cellfun(@isempty, iLines) & cellfun(@isempty, events(iEvt).channels));
+        if ~isempty(events(iEvt).channels)
+            iOccGlobal = find(cellfun(@isempty, iLines) & cellfun(@isempty, events(iEvt).channels));
+        else
+            iOccGlobal = find(cellfun(@isempty, iLines));
+        end
                
         % === CHANNEL EVENTS ===
         % Where to display the notes and events labels by default
@@ -4966,7 +5043,7 @@ function PlotEventsDots_EventsBar(hFig)
         end
         
         % === EVENT NOTES ===
-        if ~strcmpi(TsInfo.ShowEventsMode, 'none')
+        if ~strcmpi(TsInfo.ShowEventsMode, 'none') && ~isempty(events(iEvt).notes)
             for iOcc = 1:nOccur
                 % No notes attached to this event, skip
                 if isempty(events(iEvt).notes{iOcc})
@@ -5068,6 +5145,26 @@ function ReloadRawTimeBars()
         PlotRawTimeBar(iDS, iFig);
         % Resize
         ResizeCallback(hFig);
+    end
+end
+
+
+%% ===== SET TRIAL STATUS =====
+function SetTrialStatus(hFig, DataFile, isBad)
+    % Save modified markers (only when switching to good)
+    if ~isBad
+        panel_record('SaveModifications');
+    end
+    % Change trial status
+    process_detectbad('SetTrialStatus', DataFile, isBad);
+    % Update modified markers (only when switching to good)
+    if ~isBad
+        % Reload file
+        bst_memory('LoadDataFile', DataFile, 1);
+        % Reload figure
+        bst_figures('ReloadFigures', hFig, 1);
+        % Update record panel
+        panel_record('UpdatePanel', hFig);
     end
 end
 

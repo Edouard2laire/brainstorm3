@@ -25,7 +25,7 @@ function [Labels, AtlasName] = mri_getlabels(MriFile, sMri, isForced)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -57,19 +57,23 @@ maxNameLength = 16;
 if (any(MriFile == '.') || (length(MriFile) > maxNameLength)) && file_exist(MriFile)
     % Get file name
     [fPath, fBase, fExt] = bst_fileparts(MriFile);
+    % LABELS MRIcron: Try to get a side .txt with the labels
+    LabelsFile = bst_fullfile(fPath, [fBase, '.txt']);
+    if file_exist(LabelsFile)
+        Labels = in_label_mricron(LabelsFile);
+    end
     fBase = strrep(fBase, '.nii', '');
-    % Try to get a side .csv with the labels
+    % LABELS CAT12: Try to get a side .csv with the labels
     LabelsFile = bst_fullfile(fPath, [fBase, '.csv']);
     if file_exist(LabelsFile)
-        Labels = in_tsv(LabelsFile, {'ROIid','ROIname','ROIcolor'}, 0, ';');
-        if any(cellfun(@isempty, Labels(:)))
-            disp('BST> Error: Missing columns is CSV file: ROIid, ROIname or ROIcolor.');
-            Labels = [];
-        else
-            Labels(:,1) = cellfun(@str2double,  Labels(:,1), 'UniformOutput', 0);
-            Labels(:,3) = cellfun(@str2num,  Labels(:,3), 'UniformOutput', 0);
-        end
+        Labels = in_label_cat12(LabelsFile);
     end
+    % LABELS SimNIBS4: Try to get a side _LUT.txt with the labels
+    LabelsFile = bst_fullfile(fPath, [fBase, '_LUT.txt']);
+    if file_exist(LabelsFile)
+        Labels = in_label_simnibs(LabelsFile);
+    end
+
     % If labels were read: use the filename as the atlas name
     fBase = lower(fBase);
     if ~isempty(Labels)
@@ -77,8 +81,10 @@ if (any(MriFile == '.') || (length(MriFile) > maxNameLength)) && file_exist(MriF
     % Standard atlases (FreeSurfer/ASEG, BrainSuite/SVREG)
     elseif ~isempty(strfind(fBase, 'aseg')) || ~isempty(strfind(fBase, 'aparc')) % *aseg*.mgz
         AtlasName = 'freesurfer';
-    elseif ~isempty(strfind(fBase, '.svreg.label.'))   % *.svreg.label.nii.gz
+    elseif ~isempty(strfind(fBase, '.svreg.label'))   % *.svreg.label.nii.gz
         AtlasName = 'svreg';
+    elseif ~isempty(strfind(fBase, '_final_contr')) || ~isempty(strfind(fBase, 'final_tissues'))  % SimNIBS3/headreco  &  SimnNIBS4/charm
+        AtlasName = 'simnibs';
     end
 end
 % If the name of the altas is in the file comment
@@ -116,6 +122,21 @@ if isempty(Labels) && ~isempty(AtlasName)
                     3, 'CSF',           [ 44, 152, 254]; ...
                     4, 'Skull',         [255, 255, 255]; ...
                     5, 'Scalp',         [255, 205, 184]};
+        case 'simnibs'
+            Labels = {...
+                    0,   'Background',    [  0,   0,   0]; ...
+                    1,   'White',         [220, 220, 220]; ...
+                    2,   'Gray',          [130, 130, 130]; ...
+                    3,   'CSF',           [ 44, 152, 254]; ...
+                    4,   'Skull',         [255, 255, 255]; ...
+                    5,   'Scalp',         [255, 205, 184]; ...
+                    6,   'Eyes',          [255,   0, 255]; ...
+                    7,   'Compact_bone',  [255, 239, 179]; ...
+                    8,   'Spongy_bone',   [255, 138,  57]; ...
+                    9,   'Blood',         [  0,  65, 142]; ...
+                    10,  'Muscle',        [  0, 118,  14]; ...
+                    100, 'Electrode',     [  37, 79, 255]; ...
+                    500, 'Saline_or_gel', [103, 255, 226]};
     end
 end
 

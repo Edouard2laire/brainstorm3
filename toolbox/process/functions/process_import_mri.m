@@ -5,7 +5,7 @@ function varargout = process_import_mri( varargin )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -148,6 +148,11 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     end
     if isempty(iSubject)
         bst_report('Error', sProcess, [], ['Cannot create subject "' SubjectName '".']);
+        return
+    end
+    % The subject can't be using the default anatomy
+    if (iSubject ~= 0) && sSubject.UseDefaultAnat
+        bst_report('Error', sProcess, [], ['Subject "' SubjectName '" is using the default anatomy (read-only).']);
         return
     end
     

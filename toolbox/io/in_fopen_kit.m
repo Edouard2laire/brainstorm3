@@ -11,7 +11,7 @@ function [sFile, ChannelMat, errMsg] = in_fopen_kit(RawFile)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -25,7 +25,7 @@ function [sFile, ChannelMat, errMsg] = in_fopen_kit(RawFile)
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2013-2016
+% Authors: Francois Tadel, 2013-2023
 
 
 %% ===== READ HEADER =====
@@ -53,10 +53,13 @@ if (header.coreg.done == 0)
     % Get the dataset folder
     [fPath, fBase, fExt] = bst_fileparts(RawFile);
     disp(['KIT> Dataset folder: ' fPath]);
-    % Marker file: *_Marker1*.sqd or *_Marker1*.mrk
+    % Marker file: *_Marker1*.sqd, *_Marker1*.mrk or *.mrk
     MrkFile = dir(bst_fullfile(fPath, '*_Marker1*'));
     if isempty(MrkFile)
-        disp('KIT>    | Error: Marker file missing: *_Marker1*');
+        MrkFile = dir(bst_fullfile(fPath, '*.mrk'));
+    end
+    if isempty(MrkFile)
+        disp('KIT>    | Error: Marker file missing: *_Marker1* or *.mrk');
     elseif (length(MrkFile) > 1)
         disp(['KIT>    | Error: More than one marker files: ' sprintf('%s, ', MrkFile.name)]);
         MrkFile = [];
@@ -64,10 +67,16 @@ if (header.coreg.done == 0)
         disp(['KIT>    | Marker file: ' MrkFile(1).name]);
         MrkFile = bst_fullfile(fPath, MrkFile(1).name);
     end
-    % Digitized fiducials: *_Points.txt
+    % Digitized fiducials: *_Points.txt or *.elp
     FidFile = dir(bst_fullfile(fPath, '*_Points.txt'));
     if isempty(FidFile)
-        disp('KIT>    | Error: Digitized fiducials missing: *_Points.txt');
+        FidFile = dir(bst_fullfile(fPath, '*.elp'));
+    end
+    if isempty(FidFile)
+        FidFile = dir(bst_fullfile(fPath, '*.sfp'));
+    end
+    if isempty(FidFile)
+        disp('KIT>    | Error: Digitized fiducials missing: *_Points.txt / *.elp / *.sfp');
     elseif (length(FidFile) > 1)
         disp(['KIT>    | Error: More than one fiducials files: ' sprintf('%s, ', FidFile.name)]);
         FidFile = [];
@@ -75,8 +84,11 @@ if (header.coreg.done == 0)
         disp(['KIT>    | Digitized fiducials: ' FidFile(1).name]);
         FidFile = bst_fullfile(fPath, FidFile(1).name);
     end
-    % Head shape: *_HS.txt
+    % Head shape: *_HS.txt or *.hsp
     HsFile = dir(bst_fullfile(fPath, '*_HS.txt'));
+    if isempty(HsFile)
+        HsFile = dir(bst_fullfile(fPath, '*.hsp'));
+    end
     if isempty(HsFile)
         disp('KIT>    | Error: Digitized head shape missing: *_HS.txt');
     elseif (length(HsFile) > 1)
@@ -94,17 +106,17 @@ if (header.coreg.done == 0)
         header.coreg = getYkgwHdrCoregist(MrkFile);
         xyzMeg = cat(1, header.coreg.hpi.meg_pos)';
         % Read digitized fiducials (the file should contain 8 points)
-        xyzDig = ReadFastScan(FidFile);
+        xyzDig = ReadPolhemus(FidFile, 0);
         if isempty(xyzDig) || (size(xyzDig,2) ~= 8)
             error(['The fiducials file must contain 8 points:' FidFile]);
         end
         % Read head shape
         if ~isempty(HsFile)
-            xyzHs = ReadFastScan(HsFile);
-            % If there are more than 1000 points: downsample randomly
+            xyzHs = ReadPolhemus(HsFile, 1);
+            % If there are more than 2000 points: downsample randomly
             if (length(xyzHs) > 2000)
                 nVert = length(xyzHs);
-                nStep = round(nVert / 1000);
+                nStep = round(nVert / 2000);
                 xyzHs = xyzHs(:, 1:nStep:nVert);
                 disp(sprintf('KIT>    | Keeping only %d digitized points (initially %d)', length(xyzHs), nVert));
             end
@@ -182,12 +194,18 @@ for i = 1:nChannels
             % Comment including the size (used by ctf_add_coil_defs)
             ChannelMat.Channel(i).Comment = sprintf('KIT Magnetometer size = %1.2f  mm', 1000*header.sensors.channel(i).data.size);
             % Position/Orientation
-            ChannelMat.Channel(i).Loc = [header.sensors.channel(i).data.x; ...
-                                         header.sensors.channel(i).data.y; ...
-                                         header.sensors.channel(i).data.z];
-            ChannelMat.Channel(i).Orient = [sin(header.sensors.channel(i).data.zdir ./ 180 * pi) * cos(header.sensors.channel(i).data.xdir ./ 180 * pi); ...
-                                            sin(header.sensors.channel(i).data.zdir ./ 180 * pi) * sin(header.sensors.channel(i).data.xdir ./ 180 * pi); ...
-                                            cos(header.sensors.channel(i).data.zdir ./ 180 * pi)];
+            if (header.sensors.channel(i).data.x ~= 0) || (header.sensors.channel(i).data.y ~= 0) || (header.sensors.channel(i).data.z ~= 0) || (header.sensors.channel(i).data.xdir ~= 0) || (header.sensors.channel(i).data.zdir ~= 0)
+                ChannelMat.Channel(i).Loc = [header.sensors.channel(i).data.x; ...
+                                             header.sensors.channel(i).data.y; ...
+                                             header.sensors.channel(i).data.z];
+                ChannelMat.Channel(i).Orient = [sin(header.sensors.channel(i).data.zdir ./ 180 * pi) * cos(header.sensors.channel(i).data.xdir ./ 180 * pi); ...
+                                                sin(header.sensors.channel(i).data.zdir ./ 180 * pi) * sin(header.sensors.channel(i).data.xdir ./ 180 * pi); ...
+                                                cos(header.sensors.channel(i).data.zdir ./ 180 * pi)];
+            else
+                ChannelMat.Channel(i).Loc = [];
+                ChannelMat.Channel(i).Orient = [];
+                ChannelMat.Channel(i).Type = 'MEG UNDEFINED';
+            end
             ChannelMat.Channel(i).Weight = 1;
             nMag = nMag + 1;
             
@@ -376,9 +394,9 @@ if ~header.isRegistered
               'Please export data by using the "Third Party Export" function in advance.' 10 ...
               'In MegLaboratory this function is available under "Import and export" in the "File" menu.' 10 10 ...
               'Alternatively, you can specify the missing information with three files in the same folder:' 10 ...
-              ' - *_Marker1_*: File with extension .mrk or .sqd with the HPI coils in MEG device coordinates.' 10 ...
-              ' - *_Points.txt: Polhemus FastSCAN file with the fiducials and HPI coils in digitizer coordinates (mm).' 10 ...
-              ' - *_HS.txt: Polhemus FastSCAN file with the head shape points in digitizer coordinates (mm).'];
+              ' - *_Marker1_*/*.mrk: File with extension .mrk or .sqd with the HPI coils in MEG device coordinates.' 10 ...
+              ' - *_Points.txt/*.elp/.sfp: Polhemus file with the fiducials and HPI coils in digitizer coordinates.' 10 ...
+              ' - *_HS.txt/*.hsp: Polhemus file with the head shape points in digitizer coordinates.'];
     % Send to the current report
     bst_report('Warning', 'process_import_data_raw', [], errMsg);
 end
@@ -483,60 +501,89 @@ end
 %  ===============================================================================
 
 %% ===== FASTSCAN: READ POINTS =====
-function xyz = ReadFastScan(FileName)
-    % Open file
-    fid = fopen(FileName, 'r');
-    if (fid < 0)
-        error(['Cannot open file: ' FileName]);
+function [xyz, HeadPoints] = ReadPolhemus(FileName, isHeadShape)
+    xyz = [];
+    HeadPoints = [];
+    % Get format
+    [fPath, fBase, fExt] = bst_fileparts(FileName);
+    switch lower(fExt)
+        % Old FastScan
+        case '.txt'
+            % Open file
+            fid = fopen(FileName, 'r');
+            if (fid < 0)
+                error(['Cannot open file: ' FileName]);
+            end
+            % Store everything in a cell array of string
+            txtCell = textscan(fid, '%f%f%f', 'Delimiter', '\n', 'CommentStyle', '%');
+            % Close file
+            fclose(fid);
+            % Convert to millimeters
+            xyz = [txtCell{1}, txtCell{2}, txtCell{3}]' ./ 1000;
+        % New Polhemus format
+        case {'.elp', '.hsp'}
+            ChannelMat = in_channel_emse_elp(FileName);
+            if isHeadShape
+                xyz = [ChannelMat.HeadPoints.Loc];
+            else
+                xyz = [ChannelMat.Channel.Loc];
+            end
+       % BESA format
+        case '.sfp'
+            ChannelMat = in_channel_ascii(FileName, {'Name','-Y','X','Z'}, 0, .001);
+            % Get the positions of the required fiducials: {'fidnz', 'fidt9', 'fidt10', 'LPA', 'RPA', 'CPF', 'LPF', 'RPF'}
+            for fid = {'fidnz', 'fidt9', 'fidt10', 'Coil1', 'Coil2', 'Coil3', 'Coil4', 'Coil5'}
+                iChan = find(strcmpi({ChannelMat.Channel.Name}, fid{1}));
+                if isempty(iChan)
+                    xyz = [];
+                    return;
+                else
+                    xyz(1:3,end+1) = mean([ChannelMat.Channel(iChan).Loc], 2);
+                end
+            end
     end
-    % Store everything in a cell array of string
-    txtCell = textscan(fid, '%f%f%f', 'Delimiter', '\n', 'CommentStyle', '%');
-    % Close file
-    fclose(fid);
-    % Convert to millimeters
-    xyz = [txtCell{1}, txtCell{2}, txtCell{3}]' ./ 1000;
 end
 
 
-%% ===== KIT: READ COREG =====
-% NOT USED: USING YOKOGAWA FUNCTION INSTEAD
-function coreg = KitReadCoreg(KitFile)
-    % Initialize returned structure
-    coreg = struct();
-    % Open file
-    fid = fopen(KitFile, 'r');
-    if (fid < 0)
-        error(['Cannot open file: ' KitFile]);
-    end
-    % Read marker offset
-    KIT_MRK_INFO = 192;
-    fseek(fid, KIT_MRK_INFO, 'bof');
-    markerOffset = fread(fid, 1, 'int32');
-    fseek(fid, markerOffset, 'bof');
-    % Read registration information
-    coreg.done     = fread(fid, 1, 'int32');
-    coreg.meg2mri  = fread(fid, [4,4], 'double')';
-    coreg.mri2meg  = fread(fid, [4,4], 'double')';
-    nMarkers = fread(fid, 1, 'int32');
-    if (nMarkers == 5)
-        HpiLabels = {'LPA', 'RPA', 'CPF', 'LPF', 'RPF'};
-    else
-        HpiLabels = []; % How to get the labels???
-    end
-    % Read all the markers
-    for iMrk = 1:nMarkers
-        unused = fread(fid, [1 4], 'int32');
-        coreg.hpi(iMrk).mri_pos = fread(fid, [1 3], 'double');
-        coreg.hpi(iMrk).meg_pos = fread(fid, [1 3], 'double');
-        if ~isempty(HpiLabels)
-            coreg.hpi(iMrk).label = HpiLabels{iMrk};
-        else
-            coreg.hpi(iMrk).label = 'unknown';
-        end
-    end
-    % Skipping all the other fields
-    % Close file
-    fclose(fid);
-end
+% %% ===== KIT: READ COREG =====
+% % NOT USED: USING YOKOGAWA FUNCTION INSTEAD
+% function coreg = KitReadCoreg(KitFile)
+%     % Initialize returned structure
+%     coreg = struct();
+%     % Open file
+%     fid = fopen(KitFile, 'r');
+%     if (fid < 0)
+%         error(['Cannot open file: ' KitFile]);
+%     end
+%     % Read marker offset
+%     KIT_MRK_INFO = 192;
+%     fseek(fid, KIT_MRK_INFO, 'bof');
+%     markerOffset = fread(fid, 1, 'int32');
+%     fseek(fid, markerOffset, 'bof');
+%     % Read registration information
+%     coreg.done     = fread(fid, 1, 'int32');
+%     coreg.meg2mri  = fread(fid, [4,4], 'double')';
+%     coreg.mri2meg  = fread(fid, [4,4], 'double')';
+%     nMarkers = fread(fid, 1, 'int32');
+%     if (nMarkers == 5)
+%         HpiLabels = {'LPA', 'RPA', 'CPF', 'LPF', 'RPF'};
+%     else
+%         HpiLabels = []; % How to get the labels???
+%     end
+%     % Read all the markers
+%     for iMrk = 1:nMarkers
+%         unused = fread(fid, [1 4], 'int32');
+%         coreg.hpi(iMrk).mri_pos = fread(fid, [1 3], 'double');
+%         coreg.hpi(iMrk).meg_pos = fread(fid, [1 3], 'double');
+%         if ~isempty(HpiLabels)
+%             coreg.hpi(iMrk).label = HpiLabels{iMrk};
+%         else
+%             coreg.hpi(iMrk).label = 'unknown';
+%         end
+%     end
+%     % Skipping all the other fields
+%     % Close file
+%     fclose(fid);
+% end
 
 

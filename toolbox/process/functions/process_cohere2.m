@@ -1,13 +1,11 @@
 function varargout = process_cohere2( varargin )
-% PROCESS_COHERE2: Compute the coherence between one signal in one file, and all the signals in another file.
-%
-% USAGE:  OutputFiles = process_cohere2('Run', sProcess, sInputA, sInputB)
+% PROCESS_COHERE1N: Compute the coherence between all the pairs of signals, in one file.
 
 % @=============================================================================
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -21,22 +19,23 @@ function varargout = process_cohere2( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2012-2020; Hossein Shahabi, 2019-2020
+% Authors: Francois Tadel, 2012-2020
+%          Marc Lalancette, 2023
 
 eval(macro_method);
 end
 
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription()
     % Description the process
-    sProcess.Comment     = 'Coherence AxB';
+    sProcess.Comment     = 'Coherence AxB [2023]';
     sProcess.Category    = 'Custom';
     sProcess.SubGroup    = 'Connectivity';
     sProcess.Index       = 652;
     sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/Connectivity';
     % Definition of the input accepted by this process
-    sProcess.InputTypes  = {'data', 'results', 'matrix'};
+    sProcess.InputTypes  = {'data',     'results',  'matrix'};
     sProcess.OutputTypes = {'timefreq', 'timefreq', 'timefreq'};
     sProcess.nInputs     = 2;
     sProcess.nMinFiles   = 1;
@@ -49,71 +48,127 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.removeevoked.Type    = 'checkbox';
     sProcess.options.removeevoked.Value   = 0;
     sProcess.options.removeevoked.Group   = 'input';
+    sProcess.options.removeevoked.Hidden  = 1;
     % === COHERENCE METHOD
+    sProcess.options.label1.Comment = '<B>Connectivity Metric:</B>';
+    sProcess.options.label1.Type    = 'label';
     sProcess.options.cohmeasure.Comment = {...
-        ['<B>Magnitude-squared Coherence</B><BR>' ...
-        '|C|^2 = |Gxy|^2/(Gxx*Gyy)'], ...
-        ['<B>Imaginary Coherence (2019)</B><BR>' ...
-        'IC    = |imag(C)|'], ...
-        ['<B>Lagged Coherence (2019)</B><BR>' ...
-        'LC    = |imag(C)|/sqrt(1-real(C)^2)'], ...
-        ['<FONT color="#777777"> Imaginary Coherence (before 2019)</FONT><BR>' ...
-        '<FONT color="#777777"> IC    = imag(C)^2 / (1-real(C)^2) </FONT>']; ...
-        'mscohere', 'icohere2019','lcohere2019', 'icohere'};
+        'Magnitude-squared coherence', ...
+        'Imaginary coherence', ...
+        'Lagged coherence / Corrected imaginary coherence'; ...
+        'mscohere', 'icohere2019','lcohere2019'}; % , 'icohere'
+%         '<FONT color="#777777"> Squared Lagged Coherence ("imaginary coherence" before 2019)</FONT>' ...
     sProcess.options.cohmeasure.Type    = 'radio_label';
     sProcess.options.cohmeasure.Value   = 'mscohere';
-    % === Overlap
-    sProcess.options.overlap.Comment = 'Overlap for PSD estimation:' ;
-    sProcess.options.overlap.Type    = 'value';
-    sProcess.options.overlap.Value   = {50, '%', []};
-    % === MAX FREQUENCY RESOLUTION
-    sProcess.options.maxfreqres.Comment = 'Maximum frequency resolution:';
-    sProcess.options.maxfreqres.Type    = 'value';
-    sProcess.options.maxfreqres.Value   = {2,'Hz',2};
-    % === HIGHEST FREQUENCY OF INTEREST
-    sProcess.options.maxfreq.Comment = 'Highest frequency of interest:';
-    sProcess.options.maxfreq.Type    = 'value';
-    sProcess.options.maxfreq.Value   = {60,'Hz',2};
-    % === OUTPUT MODE
-    sProcess.options.outputmode.Comment = {'Save individual results (one file per input file)', 'Concatenate input files before processing (one file)', 'Save average connectivity matrix (one file)'};
-    sProcess.options.outputmode.Type    = 'radio';
-    sProcess.options.outputmode.Value   = 1;
+    % === Time-freq options
+    sProcess.options.label2.Comment = '<B>Time-frequency decomposition:</B>';
+    sProcess.options.label2.Type    = 'label';
+    sProcess.options.tfmeasure.Comment = {'Hilbert transform', 'Morlet wavelets', 'Fourier transform', ''; ...
+                                          'hilbert', 'morlet', 'stft', ''};
+    sProcess.options.tfmeasure.Type    = 'radio_linelabel';
+    sProcess.options.tfmeasure.Value   = 'hilbert';
+    % === TF OPTIONS Panel 
+    sProcess.options.tfedit.Comment = {'panel_timefreq_options', 'Options: '};
+    sProcess.options.tfedit.Type    = 'editpref';
+    sProcess.options.tfedit.Value   = [];
+    % === TIME AVERAGING
+    sProcess.options.timeres.Comment = {'Full (requires epochs)', 'Windowed', 'None', '<B>Time resolution:</B>'; ...
+                                        'full', 'windowed', 'none', ''};
+    sProcess.options.timeres.Type    = 'radio_linelabel';
+    sProcess.options.timeres.Value   = 'full';
+    sProcess.options.timeres.Controller = struct('full', 'nowindowed', 'windowed', 'windowed', 'none', 'nowindowed');
+    % === WINDOW LENGTH
+    sProcess.options.avgwinlength.Comment = '&nbsp;&nbsp;&nbsp;Time window length:';
+    sProcess.options.avgwinlength.Type    = 'value';
+    sProcess.options.avgwinlength.Value   = {1, 's', []};
+    sProcess.options.avgwinlength.Class   = 'windowed';
+    % === WINDOW OVERLAP
+    sProcess.options.avgwinoverlap.Comment = '&nbsp;&nbsp;&nbsp;Time window overlap:';
+    sProcess.options.avgwinoverlap.Type    = 'value';
+    sProcess.options.avgwinoverlap.Value   = {50, '%', []};
+    sProcess.options.avgwinoverlap.Class   = 'windowed';
+    % === OUTPUT MODE / FILE AVERAGING
+    % Ideally, 'input' would be disabled for 'full' time resolution.
+    sProcess.options.outputmode.Comment = {'separately for each file', 'across combined files/epochs', 'Estimate & save:'; ...
+                                            'input', 'avg', ''};
+    sProcess.options.outputmode.Type    = 'radio_linelabel';
+    sProcess.options.outputmode.Value   = 'input';
     sProcess.options.outputmode.Group   = 'output';
 end
 
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
-    Comment = sProcess.Comment;
+function Comment = FormatComment(sProcess)
+    if ~isempty(sProcess.options.cohmeasure.Value)
+        iMethod = find(strcmpi(sProcess.options.cohmeasure.Comment(2,:), sProcess.options.cohmeasure.Value));
+        if ~isempty(iMethod)
+            Comment = str_striptag(sProcess.options.cohmeasure.Comment{1,iMethod});
+        else
+            Comment = sProcess.Comment;
+        end
+    else
+        Comment = sProcess.Comment;
+    end
 end
 
 
 %% ===== RUN =====
-function OutputFiles = Run(sProcess, sInputA, sInputB) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInputA, sInputB)
     % Input options
     OPTIONS = process_corr2('GetConnectOptions', sProcess, sInputA, sInputB);
     if isempty(OPTIONS)
         OutputFiles = {};
         return
     end
-     
-    % Metric options
-    OPTIONS.Method = 'cohere';
-    OPTIONS.RemoveEvoked  = sProcess.options.removeevoked.Value;
-    OPTIONS.MaxFreqRes    = sProcess.options.maxfreqres.Value{1};
-    OPTIONS.MaxFreq       = sProcess.options.maxfreq.Value{1};
-    OPTIONS.CohOverlap    = 0.50;  % First pre-define the overlap
-    OPTIONS.pThresh       = 0.05;
-    OPTIONS.CohMeasure    = sProcess.options.cohmeasure.Value; 
 
-    % Change the overlap if it is specified
-    if isfield(sProcess.options, 'overlap') && isfield(sProcess.options.overlap, 'Value') && ...
-       iscell(sProcess.options.overlap.Value) && ~isempty(sProcess.options.overlap.Value) && ~isempty(sProcess.options.overlap.Value{1})
-       OPTIONS.CohOverlap = sProcess.options.overlap.Value{1}/100 ; 
+    OPTIONS.Method = 'cohere';
+    OPTIONS.CohMeasure = sProcess.options.cohmeasure.Value; 
+    OPTIONS.RemoveEvoked = sProcess.options.removeevoked.Value;
+
+    % === Time-freq method 
+    OPTIONS.tfMeasure = sProcess.options.tfmeasure.Value;
+    if ismember(OPTIONS.tfMeasure, {'hilbert','morlet', 'stft'})
+        % Get time-freq panel options
+        tfOPTIONS = sProcess.options.tfedit.Value;
+        if isempty(tfOPTIONS)
+            [bstPanelNew, panelName] = panel_timefreq_options('CreatePanel', sProcess, sInputA);
+            gui_show(bstPanelNew, 'JavaWindow', panelName, 0, 0, 0);
+            drawnow;
+            tfOPTIONS = panel_timefreq_options('GetPanelContents');
+            gui_hide(panelName);
+        end
     end
+    switch OPTIONS.tfMeasure
+        case 'hilbert'
+            OPTIONS.Freqs = tfOPTIONS.Freqs;
+            if strcmpi(sProcess.options.timeres.Value, 'windowed')
+                OPTIONS.WinLen = sProcess.options.avgwinlength.Value{1};
+                OPTIONS.WinOverlap = sProcess.options.avgwinoverlap.Value{1}/100;
+            end
+            OPTIONS.isMirror = 0;
+        case 'morlet'
+            OPTIONS.Freqs        = tfOPTIONS.Freqs(:);
+            OPTIONS.MorletFc     = tfOPTIONS.MorletFc;
+            OPTIONS.MorletFwhmTc = tfOPTIONS.MorletFwhmTc;            
+            if strcmpi(sProcess.options.timeres.Value, 'windowed')
+                OPTIONS.WinLen = sProcess.options.avgwinlength.Value{1};
+                OPTIONS.WinOverlap = sProcess.options.avgwinoverlap.Value{1}/100;
+            end
+        case 'stft'
+            OPTIONS.Freqs = [];
+            OPTIONS.StftWinLen = tfOPTIONS.StftWinLen;
+            OPTIONS.StftWinOvr = tfOPTIONS.StftWinOvr/100;
+            OPTIONS.MaxFreq    = tfOPTIONS.StftFrqMax;
+            if strcmpi(sProcess.options.timeres.Value, 'windowed')
+                OPTIONS.WinLen = sProcess.options.avgwinlength.Value{1};
+                OPTIONS.WinOverlap = sProcess.options.avgwinoverlap.Value{1}/100;
+            end
+    end
+    % Keep time or not; now option, no longer separate process
+    OPTIONS.TimeRes = sProcess.options.timeres.Value;
 
     % Compute metric
-    OutputFiles = bst_connectivity({sInputA.FileName}, {sInputB.FileName}, OPTIONS);
+    OutputFiles = bst_connectivity(sInputA, sInputB, OPTIONS);
 end
 
 

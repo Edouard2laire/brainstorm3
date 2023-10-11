@@ -2,8 +2,6 @@ function [bstDefaultNode, nodeStudiesDB, numTotalElems] = node_create_db_studies
 % NODE_CREATE_DB_STUDIES: Create a tree to represent the studies registered in current protocol.
 % Populate a tree from its root node.
 %
-% USAGE:  bstDefaultNode = node_create_db_studies(nodeRoot, expandOrder)
-%
 % INPUT: 
 %    - nodeRoot       : BstNode Java object (tree root)
 %    - expandOrder    : {'condition', 'subject'}, type of the first level nodes:
@@ -19,7 +17,7 @@ function [bstDefaultNode, nodeStudiesDB, numTotalElems] = node_create_db_studies
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -34,6 +32,8 @@ function [bstDefaultNode, nodeStudiesDB, numTotalElems] = node_create_db_studies
 % =============================================================================@
 %
 % Authors: Francois Tadel, 2008-2020
+%          Martin Cousineau, 2019
+
 import org.brainstorm.tree.*;
 
 %% ===== PARSE INPUTS =====
@@ -565,13 +565,13 @@ if ~isempty(nodeListIntra_cond)
     else
         % Get parent node
         nodeParent = nodeListIntra_cond.getParent();
-        nbChild = nodeParent.getChildCount();
         % Remove temporary analysis node
         nodeListIntra_cond.removeFromParent();
+        nbChild = nodeParent.getChildCount();
         % If there are other special nodes (Analysis-Inter, GlobalCommonfiles), put it after them
-        if (nbChild >= 2) && (nodeParent.getChildAt(1).toString.charAt(0) == '(')
+        if (nbChild >= 2) && (length(nodeParent.getChildAt(1).toString) > 1) && (nodeParent.getChildAt(1).toString.charAt(0) == '(')
             iInsert = 2;
-        elseif (nbChild >= 1) && (nodeParent.getChildAt(0).toString.charAt(0) == '(')
+        elseif (nbChild >= 1) && (length(nodeParent.getChildAt(0).toString) > 1) && (nodeParent.getChildAt(0).toString.charAt(0) == '(')
             iInsert = 1;
         else
             iInsert = 0;

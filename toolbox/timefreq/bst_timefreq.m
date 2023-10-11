@@ -36,7 +36,7 @@ function [OutputFiles, Messages, isError] = bst_timefreq(Data, OPTIONS)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -50,7 +50,9 @@ function [OutputFiles, Messages, isError] = bst_timefreq(Data, OPTIONS)
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2010-2017
+% Authors: Francois Tadel, 2010-2021
+%          Hossein Shahabi, 2020-2021
+%          Raymundo Cassani, 2020-2021
 
 % ===== DEFAULT OPTIONS =====
 Def_OPTIONS.Comment         = '';
@@ -131,12 +133,19 @@ elseif OPTIONS.SaveKernel && ischar(Data{1}) && any(~cellfun(@(c)isempty(strfind
     isError = 1;
     return;
 end
+% Cannot use the options "normalized units" and "frequency bands" at the same time
+if strcmpi(OPTIONS.Method, 'psd') && strcmpi(OPTIONS.PowerUnits, 'normalized') && ~isempty(FreqBands)
+    Messages = 'Cannot use the options "normalized units" and "frequency bands" together.';
+    isError = 1;
+    return;      
+end
         
 % Progress bar
 switch(OPTIONS.Method)
     case 'morlet',    strMap = 'time-frequency maps';
     case 'fft',       strMap = 'FFT values';
     case 'psd',       strMap = 'PSD values';
+    case 'sprint',    strMap = 'SPRiNT maps';
     case 'hilbert',   strMap = 'Hilbert maps';
     case 'mtmconvol', strMap = 'multitaper maps';
 end
@@ -147,12 +156,11 @@ DataAvg = [];
 if OPTIONS.RemoveEvoked && (length(Data) > 1)
     % Input=file names
     if ischar(Data{1})
-        [Stat, Messages] = bst_avg_files(Data, [], 'mean', 0, 0, 0, 0, 1);
+        [DataAvg, Messages] = process_remove_evoked('ComputeEvokeResponse', Data);
         if ~isempty(Messages)
             isError = 1;
             return;
         end
-        DataAvg = Stat.mean;
     % Input=data blocks
     elseif all(cellfun(@(c)isequal(size(c), size(Data{1})), Data))
         DataAvg = mean(cat(4, Data{:}), 4);
@@ -498,7 +506,7 @@ for iData = 1:length(Data)
                 end
             end
             % Invalid frequencies
-            if any(OPTIONS.Freqs <= 0)
+            if iscell(OPTIONS.Freqs) || isempty(OPTIONS.Freqs) || any(OPTIONS.Freqs <= 0)
                 Messages = 'Invalid frequency definition: All frequencies must be > 0.';
                 isError = 1;
                 return;
@@ -541,6 +549,18 @@ for iData = 1:length(Data)
             % Measure is already applied (power)
             isMeasureApplied = 1;
             
+        % SPRiNT: Spectral Parameterization Resolved iN Time (Luc Wilson)
+        case 'sprint'
+            % Calculate PSD/FFT
+            if isequal(DataType,'results') % Source data
+                OPTIONS.SPRiNTopts.imgK = ImagingKernel;
+                ImagingKernel = []; % Do not apply twice
+            end
+            [TF, Messages, OPTIONS] = bst_sprint(F, sfreq, RowNames, OPTIONS);
+            if iData == 1 % Only add comment once
+                OPTIONS.Comment = [OPTIONS.Comment ', ' sprintf('%d-%dHz', round(OPTIONS.SPRiNTopts.freqrange.Value{1}(1)),round(OPTIONS.SPRiNTopts.freqrange.Value{1}(2)))];
+            end
+                
         % Hilbert
         case 'hilbert'
             % Get bounds of each frequency bands
@@ -816,6 +836,10 @@ end
             % FileMat.TFmask = permute(~any(isnan(FileMat.TF),1), [3,2,1]);
             FileMat.TF(isnan(FileMat.TF)) = 0;
         end
+        % Add SPRiNT structure
+        if isequal(OPTIONS.Method,'sprint')
+            FileMat.Options.SPRiNT      = OPTIONS.SPRiNT;
+        end
         % History: Computation
         FileMat = bst_history('add', FileMat, 'compute', 'Time-frequency decomposition');
         if ~isempty(strHistory)
@@ -825,9 +849,16 @@ end
         % Apply time and frequency bands
         if ~isempty(FreqBands) || ~isempty(OPTIONS.TimeBands)
             if strcmpi(OPTIONS.Method, 'hilbert') && ~isempty(OPTIONS.TimeBands)
-                FileMat = process_tf_bands('Compute', FileMat, [], OPTIONS.TimeBands);
+                [FileMat, Messages] = process_tf_bands('Compute', FileMat, [], OPTIONS.TimeBands);
             elseif strcmpi(OPTIONS.Method, 'morlet') || strcmpi(OPTIONS.Method, 'psd') 
-                FileMat = process_tf_bands('Compute', FileMat, FreqBands, OPTIONS.TimeBands);
+                [FileMat, Messages] = process_tf_bands('Compute', FileMat, FreqBands, OPTIONS.TimeBands);
+            end
+            if isempty(FileMat)
+                if ~isempty(Messages)
+                    error(Messages);
+                else
+                    error('Unknow error while processing time or frequency bands.');
+                end
             end
         end
         

@@ -11,7 +11,7 @@ function varargout = panel_record(varargin)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -25,7 +25,7 @@ function varargout = panel_record(varargin)
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2010-2019
+% Authors: Francois Tadel, 2010-2021
 
 eval(macro_method);
 end
@@ -152,7 +152,7 @@ function bstPanelNew = CreatePanel() %#ok<DEFNU>
         gui_component('MenuItem', jMenu, [], 'Set color', IconLoader.ICON_COLOR_SELECTION, [], @(h,ev)bst_call(@EventTypeSetColor));
         jItem = gui_component('MenuItem', jMenu, [], 'Show/hide group', IconLoader.ICON_DISPLAY, [], @(h,ev)CallWithAccelerator(@EventTypeToggleVisible));
         jItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_H, 0));
-        gui_component('MenuItem', jMenu, [], 'Mark group as bad', IconLoader.ICON_BAD, [], @(h,ev)bst_call(@EventTypeSetBad));
+        gui_component('MenuItem', jMenu, [], 'Mark group as bad/good', IconLoader.ICON_GOODBAD, [], @(h,ev)bst_call(@EventTypeToggleBad));
         jMenu.addSeparator();
         jMenuSort = gui_component('Menu', jMenu, [], 'Sort groups', IconLoader.ICON_EVT_TYPE, [], []);
             gui_component('MenuItem', jMenuSort, [], 'By name', IconLoader.ICON_EVT_TYPE, [], @(h,ev)bst_call(@(h,ev)EventTypesSort('name')));
@@ -1290,7 +1290,7 @@ function UpdateEventsOccur()
             strOcc = sprintf(' %1.3f-%1.3f', evtTimes(1,i), evtTimes(2,i));
         end
         % Add list of channels
-        if (i <= length(event.channels)) && ~isempty(event.channels{i})
+        if ~isempty(event.channels) && (i <= length(event.channels)) && ~isempty(event.channels{i})
             strOcc = [strOcc, '  ' sprintf(' %s', event.channels{i}{:})];
         end
         listModel.addElement(strOcc);
@@ -1476,8 +1476,12 @@ function events = GetEventsInTimeWindow(hFig) %#ok<DEFNU>
         % Else keep only the occurrences in time window
         events(iEvt).times    = events(iEvt).times(:,iOccur);
         events(iEvt).epochs   = events(iEvt).epochs(iOccur);
-        events(iEvt).channels = events(iEvt).channels(iOccur);
-        events(iEvt).notes    = events(iEvt).notes(iOccur);
+        if ~isempty(events(iEvt).channels)
+            events(iEvt).channels = events(iEvt).channels(iOccur);
+        end
+        if ~isempty(events(iEvt).notes)
+            events(iEvt).notes    = events(iEvt).notes(iOccur);
+        end
         if ~isempty(events(iEvt).reactTimes)
             events(iEvt).reactTimes = events(iEvt).reactTimes(iOccur);
         end
@@ -1509,7 +1513,7 @@ function JumpToEvent(iEvent, iOccur)
         % Get current time
         CurrentTime = GlobalData.UserTimeWindow.CurrentTime;
         % Distance to events times
-        distTime = events(iEvent).times(1,:) - CurrentTime;
+        distTime = mean(events(iEvent).times, 1) - CurrentTime;
         % Action: next/previous events
         switch(action)
             case {'leftarrow', 'pagedown', 'epoch-', 'epoch--'}
@@ -1531,10 +1535,14 @@ function JumpToEvent(iEvent, iOccur)
     % Get event time
     evtEpoch = events(iEvent).epochs(iOccur);
     evtTime  = mean(events(iEvent).times(:,iOccur),1);
+    evtChannel = [];
+    if ~isempty(events(iEvent).channels)
+        evtChannel = events(iEvent).channels{iOccur};
+    end
     % Check if event is a "full page" shortcut
     RawViewerOptions = bst_get('RawViewerOptions');
     iShortcut = find(strcmpi(RawViewerOptions.Shortcuts(:,2), events(iEvent).label));
-    isFullPage = ~isempty(iShortcut) && strcmpi(RawViewerOptions.Shortcuts(iShortcut,3), 'page') && (size(events(iEvent).times,1) == 2);
+    isFullPage = ~isempty(iShortcut) && any(strcmpi(RawViewerOptions.Shortcuts(iShortcut,3), 'page')) && (size(events(iEvent).times,1) == 2);
     % If event is outside of the current user time window
     UserTime = GlobalData.UserTimeWindow.Time;
     if (evtTime < UserTime(1)) || (evtTime > UserTime(2))
@@ -1550,6 +1558,8 @@ function JumpToEvent(iEvent, iOccur)
     end
     % Select the event time
     panel_time('SetCurrentTime', evtTime);
+    % Select channels if any
+    bst_figures('SetSelectedRows', evtChannel);
 end
 
 
@@ -1608,8 +1618,12 @@ function [events, iEvent] = GetEvents(target, isIgnoreEpoch, hFig)
             iOkEpochs = (events(i).epochs == GlobalData.FullTimeWindow.CurrentEpoch);
             events(i).times    = events(i).times(:,iOkEpochs);
             events(i).epochs   = events(i).epochs(iOkEpochs);
-            events(i).channels = events(i).channels(iOkEpochs);
-            events(i).notes    = events(i).notes(iOkEpochs);
+            if ~isempty(events(i).channels)
+                events(i).channels = events(i).channels(iOkEpochs);
+            end
+            if ~isempty(events(i).reactTimes)
+                events(i).notes    = events(i).notes(iOkEpochs);
+            end
             if ~isempty(events(i).reactTimes)
                 events(i).reactTimes = events(i).reactTimes(iOkEpochs);
             end
@@ -1878,8 +1892,8 @@ function EventTypeToggleVisible()
 end
 
 
-%% ===== EVENT TYPE: SET AS BAD =====
-function EventTypeSetBad()
+%% ===== EVENT TYPE: TOGGLE BAD =====
+function EventTypeToggleBad()
     % Get selected events
     iEvents = GetSelectedEvents();
     if isempty(iEvents)
@@ -1887,22 +1901,17 @@ function EventTypeSetBad()
     end
     % Get event (ignore current epoch)
     sEvents = GetEvents(iEvents, 1);
+    % Get all events
+    sEventsAll = GetEvents();
     % Update all the groups
     isModified = 0;
     for i = 1:length(sEvents)
-        % Skip the group "BAD"
-        if strcmpi(sEvents(i).label, 'bad')
-            disp('Cannot change the status of the "BAD" category.');
-            continue;
-        % Switch to good
-        elseif IsEventBad(sEvents(i).label)
-            sEvents(i).label = strrep(sEvents(i).label, 'bad ', '');
-            sEvents(i).label = strrep(sEvents(i).label, 'bad_', '');
-            sEvents(i).label = strrep(sEvents(i).label, ' bad', '');
-            sEvents(i).label = strrep(sEvents(i).label, '_bad', '');
-        % Switch to bad
+        % Switch from bad to good
+        if IsEventBad(sEvents(i).label)
+            sEvents(i) = SetEventGood(sEvents(i), sEventsAll);
+        % Switch from good to bad
         else
-            sEvents(i).label = ['bad_' sEvents(i).label];
+            sEvents(i).label = file_unique(['bad_' sEvents(i).label], {sEventsAll.label});
         end
         % Update dataset
         SetEvents(sEvents(i), iEvents(i));
@@ -1917,6 +1926,33 @@ function EventTypeSetBad()
     UpdateEventsList();
     % Update figures
     ReplotEvents();
+end
+
+
+%% ===== SET EVENT GOOD ====
+function [sEvent, isModified] = SetEventGood(sEvent, sEventsAll)
+    isModified = 0;
+    % Switch "BAD" to good
+    if strcmpi(sEvent.label, 'bad')
+        newLabel = 'undefined';
+        isModified = 1;
+    % Switch other bad events to good
+    elseif IsEventBad(sEvent.label)
+        newLabel = strrep(sEvent.label, 'bad ', '');
+        newLabel = strrep(newLabel, 'bad_', '');
+        newLabel = strrep(newLabel, ' bad', '');
+        newLabel = strrep(newLabel, '_bad', '');
+        isModified = 1;
+    end
+    % Event was modified
+    if isModified
+        % Make new label unique
+        sEvent.label = file_unique(newLabel, {sEventsAll.label});
+        % Change the color from red to orange
+        if isequal(sEvent.color, [1 0 0])
+            sEvent.color = [1 0.65 0];
+        end
+    end
 end
 
 
@@ -1946,9 +1982,17 @@ function EventTypesMerge()
     newEvent.label    = newLabel;
     newEvent.times    = [events(iEvents).times];
     newEvent.epochs   = [events(iEvents).epochs];
-    newEvent.channels = [events(iEvents).channels];
-    newEvent.notes    = [events(iEvents).notes];
     % Reaction time, notes, channels: only if all the events have them
+    if all(~cellfun(@isempty, {events(iEvents).channels}))
+        newEvent.channels = [events(iEvents).channels];
+    else
+        newEvent.channels = [];
+    end
+    if all(~cellfun(@isempty, {events(iEvents).notes}))
+        newEvent.notes = [events(iEvents).notes];
+    else
+        newEvent.notes = [];
+    end
     if all(~cellfun(@isempty, {events(iEvents).reactTimes}))
         newEvent.reactTimes = [events(iEvents).reactTimes];
     else
@@ -1958,8 +2002,12 @@ function EventTypesMerge()
     [tmp__, iSort] = unique(bst_round(newEvent.times(1,:), 9));
     newEvent.times    = newEvent.times(:,iSort);
     newEvent.epochs   = newEvent.epochs(iSort);
-    newEvent.channels = newEvent.channels(iSort);
-    newEvent.notes    = newEvent.notes(iSort);
+    if ~isempty(newEvent.channels)
+        newEvent.channels = newEvent.channels(iSort);
+    end
+    if ~isempty(newEvent.notes)
+        newEvent.notes = newEvent.notes(iSort);
+    end
     if ~isempty(newEvent.reactTimes)
         newEvent.reactTimes = newEvent.reactTimes(iSort);
     end
@@ -2241,19 +2289,26 @@ function [sEvent, iOccur] = EventOccurAdd(iEvent, channelNames)
         end
         channelNames = unique(chanMontage);
     end
-    
     % Add event: time
-    sEvent.epochs   = [sEvent.epochs, iEpoch];
-    sEvent.times    = [sEvent.times, newTime'];
-    sEvent.channels = [sEvent.channels, {channelNames(:)'}];
-    sEvent.notes    = [sEvent.notes, {[]}];
+    sEvent.epochs = [sEvent.epochs, iEpoch];
+    sEvent.times  = [sEvent.times, newTime'];
     % Sort based on the beginning of each event
     [tmp__, indSort] = sortrows([sEvent.epochs; sEvent.times(1,:)]');
     sEvent.times    = sEvent.times(:,indSort);
     sEvent.epochs   = sEvent.epochs(indSort);
-    sEvent.channels = sEvent.channels(indSort);
-    sEvent.notes    = sEvent.notes(indSort);
-    % Add event: reactTime (only if there are already reaction times)
+    % Add list of channels (if already defined, or if adding channel-defined event)
+    if ~isempty(sEvent.channels) || ~isempty(channelNames)
+        if isempty(sEvent.channels) 
+            sEvent.channels = cell(1, size(sEvent.times,2) - 1);
+        end
+        sEvent.channels = [sEvent.channels, {channelNames(:)'}];
+        sEvent.channels = sEvent.channels(indSort);
+    end
+    % Add event: notes, reactTime (only if there are already defined)
+    if ~isempty(sEvent.notes)
+        sEvent.notes = [sEvent.notes, {[]}];
+        sEvent.notes = sEvent.notes(indSort);
+    end
     if ~isempty(sEvent.reactTimes)
         sEvent.reactTimes = [sEvent.reactTimes, 0];
         sEvent.reactTimes = sEvent.reactTimes(indSort);
@@ -2306,8 +2361,12 @@ function EventOccurDel(iEvent, iOccursEpoch)
     % Remove event occurrences
     sEvent.times(:,iOccurs)  = [];
     sEvent.epochs(iOccurs)   = [];
-    sEvent.channels(iOccurs) = [];
-    sEvent.notes(iOccurs)    = [];
+    if ~isempty(sEvent.channels)
+        sEvent.channels(iOccurs) = [];
+    end
+    if ~isempty(sEvent.notes)
+        sEvent.notes(iOccurs) = [];
+    end
     if ~isempty(sEvent.reactTimes)
         sEvent.reactTimes(iOccurs) = [];
     end
@@ -2333,9 +2392,13 @@ function EventEditNotes()
     end
     % Get event (ignore current epoch)
     sEvent = GetEvents(iEvent, 1);
+    % Add notes structure
+    if isempty(sEvent.notes)
+        sEvent.notes = cell(1, size(sEvent.times,2));
+    end
     % Format event name
     if (size(sEvent.times, 1) == 1)
-        strOcc = sprintf('"%s" (%1.3fs)', sEvent.label, sEvent.times(iOccur));
+        strOcc = sprintf('"%s" (%1.3fs)', sEvent.label, sEvent.times(1, iOccur));
     else
         strOcc = sprintf('"%s" (%1.3f-%1.3fs)', sEvent.label, sEvent.times(1,iOccur), sEvent.times(2,iOccur));
     end
@@ -2485,8 +2548,12 @@ function ExportSelectedEvents()
         sFileTmp.events = sFileTmp.events(iEvt);
         sFileTmp.events.times    = sFileTmp.events.times(:,iOcc);
         sFileTmp.events.epochs   = sFileTmp.events.epochs(:,iOcc);
-        sFileTmp.events.channels = sFileTmp.events.channels(iOcc);
-        sFileTmp.events.notes    = sFileTmp.events.notes(iOcc);
+        if ~isempty(sFileTmp.events.channels)
+            sFileTmp.events.channels = sFileTmp.events.channels(iOcc);
+        end
+        if ~isempty(sFileTmp.events.notes)
+            sFileTmp.events.notes = sFileTmp.events.notes(iOcc);
+        end
         if ~isempty(sFileTmp.events.reactTimes)
             sFileTmp.events.reactTimes = sFileTmp.events.reactTimes(iOcc);
         end
@@ -2600,7 +2667,7 @@ function [badSeg, badEpochs, badTimes, badChan] = GetBadSegments(sFile, isChanne
         % Consider only the non-empty events that have the "bad" string in them
         if IsEventBad(events(iEvt).label) && ~isempty(events(iEvt).times)
             % Exclude all the channel-specific events
-            if ~isChannelEvtBad
+            if ~isChannelEvtBad && ~isempty(events(iEvt).channels)
                 iOccBad = find(cellfun(@isempty, events(iEvt).channels));
                 if isempty(iOccBad)
                     continue;
@@ -2617,7 +2684,11 @@ function [badSeg, badEpochs, badTimes, badChan] = GetBadSegments(sFile, isChanne
             end
             badEpochs = [badEpochs, events(iEvt).epochs(iOccBad)];
             % Get channel events
-            badChan = [badChan, events(iEvt).channels(iOccBad)];
+            if ~isempty(events(iEvt).channels)
+                badChan = [badChan, events(iEvt).channels(iOccBad)];
+            else
+                badChan = [badChan, cell(1, length(iOccBad))];
+            end
         end
     end
     badSeg = round(badTimes .* sFile.prop.sfreq);
@@ -2689,6 +2760,7 @@ function CallProcessOnRaw(ProcessName)
         GlobalData.DataSet(iDS).Channel         = ChannelMat.Channel;
         GlobalData.DataSet(iDS).MegRefCoef      = ChannelMat.MegRefCoef;
         GlobalData.DataSet(iDS).Projector       = ChannelMat.Projector;
+        GlobalData.DataSet(iDS).Clusters        = ChannelMat.Clusters;
         GlobalData.DataSet(iDS).IntraElectrodes = ChannelMat.IntraElectrodes;
     else
         DataMat = in_bst_data(DataFile, 'Events');
@@ -2998,8 +3070,12 @@ function events = ChangeTimeVector(events, OldFreq, NewTime) %#ok<DEFNU>
         if ~isempty(iOut)
             events(iEvt).times(:,iOut)  = [];
             events(iEvt).epochs(iOut)   = [];
-            events(iEvt).channels(iOut) = [];
-            events(iEvt).notes(iOut)    = [];
+            if ~isempty(events(iEvt).channels)
+                events(iEvt).channels(iOut) = [];
+            end
+            if ~isempty(events(iEvt).notes)
+                events(iEvt).notes(iOut) = [];
+            end
             if ~isempty(events(iEvt).reactTimes)
                 events(iEvt).reactTimes(iOut) = [];
             end
@@ -3077,7 +3153,3 @@ function JumpToVideoTime(hFig, oldVideoTime, newVideoTime)
     % Close progress bar
     bst_progress('stop');
 end
-
-
-
-

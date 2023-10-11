@@ -24,7 +24,7 @@ function [MriFileReg, errMsg, fileTag, sMriReg] = mri_reslice(MriFileSrc, MriFil
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -239,7 +239,7 @@ end
 if isfield(sMriSrc, 'NCS')
     sMriReg.NCS = sMriRef.NCS;
 end
-if isfield(sMriRef, 'InitTransf') && ~isempty(sMriRef.InitTransf) && ismember(sMriRef.InitTransf(:,1), 'vox2ras')
+if isfield(sMriRef, 'InitTransf') && ~isempty(sMriRef.InitTransf) && ismember('vox2ras', sMriRef.InitTransf(:,1))
     sMriReg.InitTransf = sMriRef.InitTransf;
 end
 if isfield(sMriRef, 'Header') && isfield(sMriRef.Header, 'nifti') && isfield(sMriRef.Header.nifti, 'vox2ras') && ~isempty(sMriRef.Header.nifti.vox2ras)

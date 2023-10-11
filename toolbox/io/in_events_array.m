@@ -1,15 +1,15 @@
-function events = in_events_array(sFile, EventFile, format, EventName)
+function events = in_events_array(sFile, EventFile, format, EventName, isInteractive)
 % IN_EVENTS_ARRAY: Read events information from a .mat or text file 
 %
-% USAGE:  events = in_events_array(sFile, EventFile, format, 'times')
-%         events = in_events_array(sFile, EventFile, format, 'samples')
+% USAGE:  events = in_events_array(sFile, EventFile, 'times',   EventName=[ask], isInteractive=1)
+%         events = in_events_array(sFile, EventFile, 'samples', EventName=[ask], isInteractive=1)
 %         events = in_events_array(sFile, EventMat, ...)  
 
 % @=============================================================================
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -23,9 +23,12 @@ function events = in_events_array(sFile, EventFile, format, EventName)
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, Elizabeth Bock, 2012-2014
+% Authors: Francois Tadel, Elizabeth Bock, 2012-2023
 
 % Parse inputs
+if (nargin < 5) || isempty(isInteractive)
+    isInteractive = 1;
+end
 if (nargin < 4) || isempty(EventName)
     EventName = [];
 end
@@ -42,10 +45,8 @@ if ischar(EventFile)
             EventsMat = EventsMat.(fields{1});
         end
     end
-    isInteractive = 1;
 else
     EventsMat = EventFile;
-    isInteractive = 0;
 end
 % Force to be double
 EventsMat = double(EventsMat);
@@ -67,7 +68,7 @@ end
 if isInteractive
     % Check for offset (typical of FIF files)
     isAddOffset = 0;
-    if (sFile.prop.times(1) > 0)
+    if (sFile.prop.times(1) ~= 0)
         res = java_dialog('question', ['The raw data file starts at ' num2str(sFile.prop.times(1)) ' sec.' 10 10 ...
                                       'Is this offset already added to these events?' 10 10],...
                                       'Import events', [], {'Yes', 'Add Offset','Cancel'},'Yes');
@@ -103,8 +104,8 @@ events.reactTimes = [];
 events.select     = 1;
 events.times      = evtTimes;
 events.epochs     = ones(1, length(evtTimes));  % Epoch: set as 1 for all the occurrences
-events.channels   = cell(1, size(events.times, 2));
-events.notes      = cell(1, size(events.times, 2));
+events.channels   = [];
+events.notes      = [];
 
 
 

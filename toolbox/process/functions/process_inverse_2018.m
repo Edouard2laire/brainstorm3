@@ -5,7 +5,7 @@ function varargout = process_inverse_2018( varargin )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -176,9 +176,11 @@ function [OutputFiles, errMessage] = Compute(iStudies, iDatas, OPTIONS)
         return;
     end
     % Check noise covariance
-    if any(cellfun(@isempty, {sChanStudies.NoiseCov}))
-        errMessage = 'No noise covariance matrix available.';
-        return;
+    for i = 1:length(sChanStudies)
+        if isempty(sChanStudies(i).NoiseCov) || ~isfield(sChanStudies(i).NoiseCov(1), 'FileName') || isempty(sChanStudies(i).NoiseCov(1).FileName)
+            errMessage = 'No noise covariance matrix available.';
+            return;
+        end
     end
     % Loop through all the channel files to find the available modalities and head model types
     AllMod = {};
@@ -256,11 +258,11 @@ function [OutputFiles, errMessage] = Compute(iStudies, iDatas, OPTIONS)
                 errMessage = 'Cannot compute shared kernels with this method.';
                 return
             end
-            % % Install/load brainentropy plugin
-            % [isInstalled, errMessage] = bst_plugin('Install', 'brainentropy', 1);
-            % if ~isInstalled
-            %     return;
-            % end
+            % Install/load brainentropy plugin
+            [isInstalled, errMessage] = bst_plugin('Install', 'brainentropy', 1);
+            if ~isInstalled
+                return;
+            end
             % Default options
             MethodOptions = be_main();
             % Interface to edit options
@@ -603,7 +605,7 @@ function [OutputFiles, errMessage] = Compute(iStudies, iDatas, OPTIONS)
                 end
                 % In the case of a surface region, add the match of the vertices in the cortex surface and the GridLoc matrix
                 if strcmpi(sScout.Region(2), 'S')
-                    iVert2Grid = [iVert2Grid; sScout.Vertices', sScout.GridRows'];
+                    iVert2Grid = [iVert2Grid; sScout.Vertices(:), sScout.GridRows(:)];
                 end
                 % Add to the scout definition the indices in the ImageGrid
                 iAllGrid   = [iAllGrid,   reshape(repmat(sScout.GridRows,nComp,1), 1, [])];
@@ -612,12 +614,16 @@ function [OutputFiles, errMessage] = Compute(iStudies, iDatas, OPTIONS)
             end
             % Create sparse conversion matrices between indices
             if ~isempty(iVert2Grid)
-                HeadModelInit.GridAtlas(1).Vert2Grid = logical(sparse(iVert2Grid(:,2), iVert2Grid(:,1), ones(size(iVert2Grid,1),1)));
+                % Ensure size is full grid for clarity and to allow matrix multiplication, e.g. with Grid2Source.
+                % If the last region(s) are volume, they correspond to grid points but not vertices,
+                % so this sparse array could be missing grid rows were its size not specified.
+                nVert = size(iVert2Grid,1);
+                HeadModelInit.GridAtlas(1).Vert2Grid = sparse(iVert2Grid(:,2), iVert2Grid(:,1), true(nVert,1), max(iAllGrid), max(iVert2Grid(:,1)));
             else
                 HeadModelInit.GridAtlas(1).Vert2Grid = [];
             end
             if ~isempty(iAllSource)
-                HeadModelInit.GridAtlas(1).Grid2Source = logical(sparse(iAllSource, iAllGrid, ones(size(iAllSource))));
+                HeadModelInit.GridAtlas(1).Grid2Source = sparse(iAllSource, iAllGrid, true(size(iAllSource)));
             else
                 HeadModelInit.GridAtlas(1).Grid2Source = [];
             end

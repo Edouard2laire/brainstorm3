@@ -31,7 +31,7 @@ function [hCuts, OutputOptions] = mri_draw_cuts(hFig, OPTIONS)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -240,6 +240,10 @@ function cmapA = ApplyColormap( A, CMap, intensityBounds, isIndexed )
         A(A > intensityBounds(2)) = intensityBounds(2);
         % Reduce array amplitude to the the colormap size
         A = floor( (A - intensityBounds(1)) ./ (intensityBounds(2)-intensityBounds(1)) .* (size(CMap,1)-1) ) + 1;
+    end
+    % If slice is full of NaNs (FOOOF @ 0Hz)
+    if (nnz(isnan(A)) > 0)
+        A(isnan(A)) = 1;
     end
     % Create RGB array
     cmapA = cat(3, reshape(CMap(A,1), size(A)), ...

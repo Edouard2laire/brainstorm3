@@ -9,7 +9,7 @@ function varargout = panel_options(varargin)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -23,7 +23,7 @@ function varargout = panel_options(varargin)
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2009-2021
+% Authors: Francois Tadel, 2009-2023
 
 eval(macro_method);
 end
@@ -142,6 +142,8 @@ function [bstPanelNew, panelName] = CreatePanel() %#ok<DEFNU>
         jPanelReset = gui_river([5 5], [0 15 15 15], 'Reset Brainstorm');
             gui_component('Label',  jPanelReset, [], 'Reset database and options to defaults: ', [], [], []);
             gui_component('Button', jPanelReset, [], 'Reset', [], [], @ButtonReset_Callback);
+            gui_component('Label',  jPanelReset, 'br', 'Empty temporary directory: ', [], [], []);
+            gui_component('Button', jPanelReset, [], 'Empty', [], [], @(h,ev)gui_brainstorm('EmptyTempFolder', 1));
         jPanelRight.add('br hfill', jPanelReset);
     end
     
@@ -220,7 +222,7 @@ function [bstPanelNew, panelName] = CreatePanel() %#ok<DEFNU>
         % Python config
         jTextPythonExe.setText(bst_get('PythonExe'));
         % Use signal processing toolbox
-        isToolboxInstalled = (exist('fir2', 'file') > 0);
+        isToolboxInstalled = (exist('kaiserord', 'file') > 0);
         jCheckUseSigProc.setEnabled(isToolboxInstalled);
         jCheckUseSigProc.setSelected(bst_get('UseSigProcToolbox'));
         processOptions = bst_get('ProcessOptions');

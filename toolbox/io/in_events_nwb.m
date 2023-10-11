@@ -5,7 +5,7 @@ function events = in_events_nwb(sFile, nwb2, nEpochs, ChannelMat)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -51,8 +51,8 @@ if events_exist
         events(iEvent).label    = all_event_keys{iEvent};
         events(iEvent).color    = rand(1,3);
         events(iEvent).times    = nwb2.stimulus_presentation.get(all_event_keys{iEvent}).timestamps.load';     
-        events(iEvent).channels = cell(1, size(events(iEvent).times, 2));
-        events(iEvent).notes    = cell(1, size(events(iEvent).times, 2));
+        events(iEvent).channels = [];
+        events(iEvent).notes    = [];
         % Check on which epoch each event belongs to
         if nEpochs > 1
             % Initialize to first epoch - if some events are not within the
@@ -122,8 +122,8 @@ if SpikesExist
         events_spikes(iNeuron).times      = times;
         events_spikes(iNeuron).reactTimes = [];
         events_spikes(iNeuron).select     = 1;
-        events_spikes(iNeuron).channels   = cell(1, size(events_spikes(iNeuron).times, 2));
-        events_spikes(iNeuron).notes      = cell(1, size(events_spikes(iNeuron).times, 2));
+        events_spikes(iNeuron).channels   = repmat({{ChannelMat.Channel(theChannel).Name}}, 1, size(events_spikes(iNeuron).times, 2));
+        events_spikes(iNeuron).notes      = [];
         
         % Check on which epoch each event belongs to
         if nEpochs > 1

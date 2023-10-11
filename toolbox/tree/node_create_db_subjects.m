@@ -2,8 +2,6 @@ function [bstDefaultNode, nodeSubjectsDB, numTotalElems] = node_create_db_subjec
 % NODE_CREATE_DB_SUBJECTS: Create a tree to represent the subjects registered in current protocol.
 % Populate a tree from its root node.
 %
-% USAGE:  node_create_db_subjects(nodeRoot)
-%
 % INPUT: 
 %    - nodeRoot       : BstNode Java object (tree root)
 %    - iSearch        : ID of the active DB search, or empty/0 if none
@@ -17,7 +15,7 @@ function [bstDefaultNode, nodeSubjectsDB, numTotalElems] = node_create_db_subjec
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -52,9 +50,8 @@ numTotalElems  = 0;
 % Get current protocol subjects list
 ProtocolSubjects = bst_get('ProtocolSubjects');
 if (isempty(ProtocolSubjects))
-    %warning('Brainstorm:NoProtocol', 'No protocol selected')
     return
-end;
+end
 % Get current protocol description
 ProtocolInfo = bst_get('ProtocolInfo');
 % Get current subject
@@ -90,7 +87,7 @@ if ~isempty(ProtocolSubjects.DefaultSubject)
 end
 
 % Sort subjects by Name
-[tmp__, iSubjectsSorted] = sort({ProtocolSubjects.Subject.Name});
+[tmp__, iSubjectsSorted] = sort_nat({ProtocolSubjects.Subject.Name});
 % Find subject "Group_analysis"
 iSubjectGroup = find(strcmpi({ProtocolSubjects.Subject.Name}, bst_get('NormalizedSubjectName')));
 % If it exists: Remove it from the sorted list

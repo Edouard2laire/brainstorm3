@@ -12,7 +12,7 @@ function bst_startup(BrainstormHomeDir, GuiLevel, BrainstormDbDir)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -27,7 +27,7 @@ function bst_startup(BrainstormHomeDir, GuiLevel, BrainstormDbDir)
 % =============================================================================@
 %
 % Authors: Sylvain Baillet, John C. Mosher, 1999
-%          Francois Tadel, 2008-2021
+%          Francois Tadel, 2008-2023
 
 
 %% ===== MATLAB CHECK =====
@@ -70,6 +70,10 @@ GlobalData.Program.GuiLevel = GuiLevel;
 GlobalData.DataBase.LastSavedTime = tic();   % Save the current time, to know when to save the database
 % Save the software home directory
 bst_set('BrainstormHomeDir', BrainstormHomeDir);
+% Debugging: show path in compiled application
+if isCompiled
+    disp(['BST> BrainstormHomeDir = ' BrainstormHomeDir]);
+end
 % Test for headless mode
 if (GuiLevel >= 0) && (java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment.isHeadless() || java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment.isHeadlessInstance())
     disp(' ');
@@ -95,6 +99,13 @@ try
     Version = cellVer{1}{1};
     Release = cellVer{1}{1}(3:end);
     Date = cellVer{2}{1}(2:end-1);
+    % Try to get GIT commit
+    Commit = fgetl(fid);
+    if ischar(Commit) && (length(Commit) >= 40)
+        Commit = Commit(10:end);
+    else
+        Commit = [];
+    end
     % Close file
     fclose(fid);
 catch
@@ -102,12 +113,28 @@ catch
     Version = '?';
     Release = '??????';
     Date    = '?';
+    Commit  = [];
+end
+% If the commit is not available from the version.txt file, try to get it from the .git folder (if cloned from github)
+if isempty(Commit)
+    gitMaster = bst_fullfile(BrainstormHomeDir, '.git', 'refs', 'heads', 'master');
+    if exist(gitMaster, 'file')
+        fid = fopen(gitMaster, 'rt');
+        if (fid >= 0)
+            strGit = fgetl(fid);
+            if ischar(strGit) && (length(strGit) >= 30)
+                Commit = strGit;
+            end
+            fclose(fid);
+        end
+    end
 end
 % Save version in matlab preferences
 bstVersion = struct('Name',    Name, ...
                     'Version', Version, ...
                     'Release', Release, ...
-                    'Date',    Date);
+                    'Date',    Date, ...
+                    'Commit',  Commit);
 bst_set('Version', bstVersion);
 % Display version number
 disp(['BST> Version: ' Date ]);
@@ -120,10 +147,7 @@ localRel.day   = str2num(Release(5:6));
 if (MatlabVersion <= 803)
     disp('BST> Warning: For better graphics, use Matlab >= 2014b');
 end
-% % Force Matlab to recycle the files instead of deleting them
-% if exist('recycle','builtin') && strcmpi(recycle, 'off')
-%     recycle('on');
-% end
+
 
 %% ===== FORCE COMPILATION OF SOME INTERFACE FILES =====
 if (GuiLevel == 1)
@@ -139,10 +163,6 @@ if (GuiLevel == 1)
     bst_memory();
     bst_navigator();
 end
-
-
-%% ===== EMPTY TEMPORARY DIRECTORY =====
-gui_brainstorm('EmptyTempFolder');
 
 
 %% ===== EMPTY REPORTS DIRECTORY =====
@@ -256,6 +276,10 @@ if ~isempty(bstOptions)
     % Reset current search filter
     if isfield(GlobalData.Preferences, 'NodelistOptions') && isfield(GlobalData.Preferences.NodelistOptions, 'String') && ~isempty(GlobalData.Preferences.NodelistOptions.String)
         GlobalData.Preferences.NodelistOptions.String = '';
+    end
+    % Reset previous exploration mode
+    if isfield(GlobalData.Preferences, 'Layout') && isfield(GlobalData.Preferences.Layout, 'PreviousExplorationMode')
+        GlobalData.Preferences.Layout.PreviousExplorationMode = GlobalData.Preferences.Layout.ExplorationMode;
     end
     % Check database structure for updates
     db_update(CurrentDbVersion);
@@ -397,11 +421,27 @@ end
 %% ===== LOAD PLUGINS =====
 % Get installed plugins
 [InstPlugs, AllPlugs] = bst_plugin('GetInstalled');
-% Find plugins that should be loaded automatically at startup
+% Check installed plugins
 if ~isempty(InstPlugs)
+    % Display the plugins that are using custom installed path
+    iPlugCustom = find([InstPlugs.isLoaded] & ~[InstPlugs.isManaged]);
+    for iPlug = iPlugCustom
+        disp(['BST> Plugin ' InstPlugs(iPlug).Name ': ' InstPlugs(iPlug).Path]);
+        if strcmpi(InstPlugs(iPlug).Name, 'spm12') && isempty(strfind(spm('ver'), 'SPM12'))
+            disp(['BST> ** WARNING: Installed version is not SPM12: ' spm('ver') ' **']);
+        end
+    end
+    % Load plugins that should be loaded automatically at startup
     iPlugLoad = find([InstPlugs.AutoLoad] & ~[InstPlugs.isLoaded]);
+    if ~isempty(iPlugLoad)
+        fprintf('BST> Loading plugins... ');
+    end
     for iPlug = iPlugLoad
-        bst_plugin('Load', InstPlugs(iPlug)); 
+        bst_plugin('Load', InstPlugs(iPlug), 0);
+        fprintf([InstPlugs(iPlug).Name, ' ']);
+    end
+    if ~isempty(iPlugLoad)
+        fprintf('\n');
     end
 end
 
@@ -410,6 +450,40 @@ end
 % Parse process folder
 disp('BST> Reading process folder...');
 panel_process_select('ParseProcessFolder', 1);
+
+
+%% ===== INSTALL ANATOMY TEMPLATE =====
+% Download ICBM152 template if missing (e.g. when cloning from GitHub)
+TemplateDir = fullfile(BrainstormHomeDir, 'defaults', 'anatomy', 'ICBM152');
+if ~isCompiled && ~exist(TemplateDir, 'file')
+    TemplateName = 'ICBM152_2023b';
+    isSkipTemplate = 0;
+    % Template file
+    ZipFile = bst_fullfile(bst_get('UserDefaultsDir'), 'anatomy', [TemplateName '.zip']);
+    % If template is not downloaded yet: download it
+    if ~exist(ZipFile, 'file')
+        disp('BST> Downloading ICBM152 template...');
+        % Download file
+        errMsg = gui_brainstorm('DownloadFile', ['http://neuroimage.usc.edu/bst/getupdate.php?t=' TemplateName], ZipFile, 'Download template');
+        % Error message
+        if ~isempty(errMsg)
+            disp(['BST> Error: Could not download template: ' errMsg]);
+            isSkipTemplate = 1;
+        end
+    end
+    % If the template is available as a zip file
+    if ~isSkipTemplate
+        disp('BST> Installing ICBM152 template...');
+        % Create folder
+        mkdir(TemplateDir);
+        % URL: Download zip file
+        try
+            unzip(ZipFile, TemplateDir);
+        catch
+            disp(['BST> Error: Could not unzip anatomy template: ' lasterr]);
+        end
+    end
+end
 
 
 %% ===== LICENSE AGREEMENT =====
@@ -478,6 +552,8 @@ end
 
 %% ===== SET DATABASE DIRECTORY =====
 isImportDb = 0;
+% Get user dir
+BrainstormUserDir = bst_get('BrainstormUserDir');
 % Get database folder
 if isempty(BrainstormDbDir)
     BrainstormDbDir = bst_get('BrainstormDbDir');
@@ -567,12 +643,11 @@ set(hMutex, 'Visible', 'off');
 
 
 %% ===== DELETE OLD PLUGINS =====
-% Get user dir
-BrainstormUserDir = bst_get('BrainstormUserDir');
 % Start with GUI
 if (GuiLevel == 1)
     % Add bst_duneuro (now called 'duneuro')
     AllPlugs(end+1).Name = 'bst_duneuro';
+    AllPlugs(end+1).Name = 'nirstorm';
     iOldInstall = find(cellfun(@(c)exist(fullfile(BrainstormUserDir,c),'file'), {AllPlugs.Name}));
     % Some old plugins were detected: ask user
     if ~isempty(iOldInstall)
@@ -583,9 +658,20 @@ if (GuiLevel == 1)
             'Next time you need them, they will be downloaded again automatically.' 10 10 ...
             'Delete the old plugins listed below?' 10 ...
             sprintf(' - %s\n', OldPlugPath{:})], 'Plugin manager');
+        % Delete plugin
         if isConfirm
+            % Delete files in $HOME/.brainstorm/plugname
             file_delete(OldPlugPath, 1, 3);
-        end
+            % NIRSTORM: Call uninstall function (it previously installed functions in various $HOME/.brainstorm subfolders)
+            if any(strcmpi({AllPlugs(iOldInstall).Name},'nirstorm')) && exist('uninstall_nirstorm')
+                cur_dir=pwd;
+                cd(bst_get('UserProcessDir'));
+                uninstall_nirstorm();
+                file_delete(fullfile(bst_get('UserProcessDir'),'uninstall_nirstorm.m'),1);
+                file_delete(fullfile(bst_get('UserProcessDir'),{'dg_voronoi.mexa64','dg_voronoi.mexglx'}),1);
+                cd(cur_dir);
+            end
+        end     
     end
 end
 
@@ -622,6 +708,7 @@ try
 catch
     fwrite(fid, ['Host: Unknown (' char(java.lang.System.getProperty('os.name')) ' ' char(java.lang.System.getProperty('os.version')) ')' 10]);
 end
+fclose(fid);
 
 
 %% ===== SET TEMPORARY FOLDER =====
@@ -645,6 +732,9 @@ if ~isempty(strfind(TmpDir, '/home/bic/'))
     % Edit preferences
     gui_show('panel_options', 'JavaWindow', 'Brainstorm preferences', [], 1, 0, 0);
 end
+
+% Empty temporary folder with confirmation (if nogui/server: display warning)
+gui_brainstorm('EmptyTempFolder', 1);
 
 
 %% ===== PREPARE BUG REPORTING =====

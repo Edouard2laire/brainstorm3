@@ -8,7 +8,7 @@ function varargout = process_tf_measure( varargin )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -159,6 +159,10 @@ function [DefFunction, ColormapType] = GetDefaultFunction(sTimefreq) %#ok<DEFNU>
         case 'henv',     DefFunction = 'other';       ColormapType = 'connect1';
         case 'plv',      DefFunction = 'magnitude';   ColormapType = 'connect1';
         case 'plvt',     DefFunction = 'magnitude';   ColormapType = 'connect1';
+        case 'ciplv',    DefFunction = 'magnitude';   ColormapType = 'connect1';
+        case 'ciplvt',   DefFunction = 'magnitude';   ColormapType = 'connect1';
+        case 'wpli',     DefFunction = 'magnitude';   ColormapType = 'connect1';
+        case 'wplit',    DefFunction = 'magnitude';   ColormapType = 'connect1';
         case 'pac',      DefFunction = 'maxpac';      ColormapType = 'pac';
         case 'dpac',     DefFunction = 'maxpac';      ColormapType = 'pac';
         case 'tpac',     DefFunction = 'maxpac';      ColormapType = 'pac';

@@ -9,7 +9,7 @@ function varargout = panel_duneuro(varargin)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -281,7 +281,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     
     % ===== HELP BUTTON =====
     jPanelHelp = gui_river([1,1], [12,6,6,6]);
-    jButtonHelp = gui_component('Button', jPanelHelp, 'right', 'Help', [], [], @(h,ev)web('https://neuroimage.usc.edu/brainstorm/Duneuro', '-browser'), []);
+    jButtonHelp = gui_component('Button', jPanelHelp, 'right', 'Help', [], [], @(h,ev)web('https://neuroimage.usc.edu/brainstorm/Tutorials/Duneuro', '-browser'), []);
     jButtonHelp.setForeground(Color(.7, 0, 0));
     c.gridy = 6;
     c.weighty = 0;

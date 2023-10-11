@@ -8,7 +8,7 @@ function tree_view_scouts( bstNodes )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -103,7 +103,8 @@ else
 end
 
 
-% If no scouts are available: load surface
+% If no scouts are available: load surface and select all scouts in default atlas. Otherwise use
+% selected scouts.
 sScouts = panel_scout('GetScouts');
 if isempty(sScouts)
     % Get surface filename
@@ -123,19 +124,20 @@ if isempty(sScouts)
     end
     % Select all the scouts
     TargetScouts = 1:length(sScouts);
+    % Actually select them for consistency, e.g. if repeating same action.
+    panel_scout('SetSelectedScouts', TargetScouts);
 else
-    TargetScouts = 'SelectedScouts';
+    [sScouts, TargetScouts] = panel_scout('GetSelectedScouts');
+    % Warning message if no scout selected
+    if isempty(TargetScouts)
+        java_dialog('warning', 'No scout selected.', 'Display time series');
+        return;
+    end
 end
     
 % ===== DISPLAY SELECTED SCOUTS =====
 % Average of directPAC maps
 if ~isempty(isPac) && all(isPac)
-    % Get selected scouts
-    if isequal(TargetScouts, 'SelectedScouts')
-        sPacScouts = panel_scout('GetSelectedScouts');
-    else
-        sPacScouts = TargetScouts;
-    end
     % No selected scouts
     if isempty(sScouts)
         return;

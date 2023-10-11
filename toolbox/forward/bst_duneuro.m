@@ -7,7 +7,7 @@ function [Gain, errMsg] = bst_duneuro(cfg)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -22,7 +22,7 @@ function [Gain, errMsg] = bst_duneuro(cfg)
 % =============================================================================@
 %
 % Authors: Takfarinas Medani, Juan Garcia-Prieto, 2019-2021
-%          Francois Tadel 2020-2021
+%          Francois Tadel 2020-2023
 
 % Initialize returned values
 Gain = [];
@@ -39,13 +39,6 @@ if ispc
 else
     DuneuroExe = [DuneuroExe, '.app'];
 end
-% Empty temp folder
-gui_brainstorm('EmptyTempFolder');
-% Get temp folder
-TmpDir = bst_get('BrainstormTmpDir');
-% Display message
-bst_progress('text', 'DUNEuro: Writing temporary files...');
-disp(['DUNEURO> Writing temporary files to: ' TmpDir]);
 
 
 %% ===== SENSORS =====
@@ -91,15 +84,17 @@ if isMeg
         for iChan = 1 : length(cfg.iMeg)
             group = MegChannels(MegChannels(:,1) == iChan,:);
             groupPositive = group(group(:,end)>0,:);
-            groupNegative = group(group(:,end)<0,:);
+            groupNegative = group(group(:,end)<0,:);            
             if ~isempty(groupPositive)
-                equivalentPositionPostive = sum(repmat(abs(groupPositive(:,end)),[1 3])  .* groupPositive(:,2:4));
+                %equivalentPositionPostive = sum(repmat(abs(groupPositive(:,end)),[1 3])  .* groupPositive(:,2:4));
+                equivalentPositionPostive = mean(groupPositive(:,2:4));
                 MegChannelsTemp = [MegChannelsTemp; iChan  equivalentPositionPostive groupPositive(1,5:7)  sum(groupPositive(:,end))];
             end
             if ~isempty(groupNegative)
-                equivalentPositionNegative = sum(repmat(abs(groupNegative(:,end)),[1 3])  .* groupNegative(:,2:4));
+                %equivalentPositionNegative = sum(repmat(abs(groupNegative(:,end)),[1 3])  .* groupNegative(:,2:4));
+                equivalentPositionNegative = mean(groupNegative(:,2:4));
                 MegChannelsTemp = [MegChannelsTemp; iChan  equivalentPositionNegative groupNegative(1,5:7)  sum(groupNegative(:,end))];
-            end 
+            end
         end
         MegChannels = MegChannelsTemp;
     end
@@ -177,9 +172,17 @@ else
     MeshFile = 'head_model.geo';
     cfg.UseTensor = true;
 end
+
+% Get temp folder
+TmpDir = bst_get('BrainstormTmpDir', 0, 'duneuro');
+% Display message
+bst_progress('text', 'DUNEuro: Writing temporary files...');
+disp(['DUNEURO> Writing temporary files to: ' TmpDir]);
+
 % Write mesh model
 MeshFile = fullfile(TmpDir, MeshFile);
 out_fem(FemMat, MeshFile);
+
 
 %% ====== SOURCE SPACE =====
 % Source space type
@@ -207,6 +210,8 @@ switch (cfg.HeadModelType)
             % Install/load iso2mesh plugin
             [isInstalled, errMsg] = bst_plugin('Install', 'iso2mesh', cfg.Interactive);
             if ~isInstalled
+                % Delete the temporary files
+                file_delete(TmpDir, 1, 1);
                 return;
             end
             % Extract GM vertices and elements
@@ -590,10 +595,16 @@ end
 Gain = NaN * zeros(length(cfg.Channel), 3 * length(cfg.GridLoc));
 if isMeg
     Gain(cfg.iMeg,:) = GainMeg; 
+    % scaling the MEG Gain matrix 
+    Gain(cfg.iMeg,:) = GainMeg/1000; 
 end 
 if (isEeg || isEcog || isSeeg) 
     Gain(cfg.iEeg,:) = GainEeg; 
 end
+
+% Delete the temporary files
+file_delete(TmpDir, 1, 1);
+
 
 %% ===== SAVE TRANSFER MATRIX ======
 disp('DUNEURO> TODO: Save transferOut.dat to database.')

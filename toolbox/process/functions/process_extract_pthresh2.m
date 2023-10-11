@@ -7,7 +7,7 @@ function varargout = process_extract_pthresh2( varargin )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -78,7 +78,7 @@ function OutputFiles = Run(sProcess, sInput, sInput2) %#ok<DEFNU>
             if isfield(sFileA, 'pmap') && ~isempty(sFileA.pmap)
                 sFileA.pmap = sFileA.pmap(iChannels,:,:);
             end
-            if isfield(StatMsFileAat, 'tmap') && ~isempty(sFileA.tmap)
+            if isfield(sFileA, 'tmap') && ~isempty(sFileA.tmap)
                 sFileA.tmap = sFileA.tmap(iChannels,:,:);
             end
             % Create a new data file structure

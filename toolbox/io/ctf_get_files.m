@@ -17,7 +17,7 @@ function [DataSetName, meg4_files, res4_file, marker_file, pos_file, hc_file, ba
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -182,9 +182,10 @@ end
 badseg_file = bst_fullfile(ds_directory, 'bad.segments');
 % Check that file is accessible
 if ~file_exist(badseg_file)
-    if verbose
-        disp(['CTF> Warning: ' badseg_file ' missing.']);
-    end
+    % Not always present, and that's ok.
+    %     if verbose
+    %         disp(['CTF> Warning: ' badseg_file ' missing.']);
+    %     end
     badseg_file = [];
 end
 

@@ -1,13 +1,13 @@
-function export_default_anat(iSubject, DefaultName, IncludeChannels)
+function ZipFile = export_default_anat(iSubject, DefaultName, IncludeChannels)
 % EXPORT_DEFAULT_ANAT: Export a subject anatomy as a user template in a .zip file.
 %
-% USAGE:  export_mri( iSubject, DefaultName=[ask], IncludeChannels=[ask] )
+% USAGE:  ZipFile = export_default_anat( iSubject, DefaultName=[ask], IncludeChannels=[ask] )
 
 % @=============================================================================
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -21,7 +21,9 @@ function export_default_anat(iSubject, DefaultName, IncludeChannels)
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2013-2020
+% Authors: Francois Tadel, 2013-2021
+
+ZipFile = [];
 
 % ===== GET DEFAULT NAME =====
 % Get subject 
@@ -66,12 +68,17 @@ for i = 1:length(sSubject.Anatomy)
     sMriNew.Cube    = sMri.Cube;
     sMriNew.Voxsize = sMri.Voxsize;
     sMriNew.SCS     = sMri.SCS;
-    sMriNew.NCS     = sMri.NCS;
+    if isfield(sMri, 'NCS')
+        sMriNew.NCS = sMri.NCS;
+    end
     if isfield(sMri, 'Header')
         sMriNew.Header = sMri.Header;
     end
     if isfield(sMri, 'InitTransf')
         sMriNew.InitTransf = sMri.InitTransf;
+    end
+    if isfield(sMri, 'Labels')
+        sMriNew.Labels = sMri.Labels;
     end
     % Save file back
     bst_save(MriFile, sMriNew, 'v7');
@@ -86,24 +93,27 @@ for i = 1:length(sSubject.Surface)
     % Copy to new structure
     sTessNew = db_template('surfacemat');
     sTessNew.Comment  = sTess.Comment;
-    sTessNew.Vertices = double(sTess.Vertices);
-    sTessNew.Faces    = sTess.Faces;
-    % Copy atlases
-    if isfield(sTess, 'Atlas') && ~isempty(sTess.Atlas)
-        sTessNew.Atlas = sTess.Atlas;
+    sTessNew.Vertices = double(single(sTess.Vertices));
+    % Copy other fields
+    for f = {'Faces', 'Atlas', 'Reg', 'Elements', 'Tissue', 'TissueLabels', 'Tensors'}
+        if isfield(sTess, f{1}) && ~isempty(sTess.(f{1}))
+            sTessNew.(f{1}) = sTess.(f{1});
+        end
     end
     % Select "user scouts" (for cortex) or "structures" (for aseg)
-    if ~isempty(strfind(sTessNew.Comment, 'aseg')) || ~isempty(strfind(sTessNew.Comment, 'subcortical'))
-        sTessNew.iAtlas = find(strcmpi({sTessNew.Atlas.Name}, 'Structures'));
-    else
-        sTessNew.iAtlas = 1;
+    if isfield(sTess, 'iAtlas') && ~isempty(sTess.iAtlas)
+        if ~isempty(strfind(sTessNew.Comment, 'aseg')) || ~isempty(strfind(sTessNew.Comment, 'subcortical'))
+            sTessNew.iAtlas = find(strcmpi({sTessNew.Atlas.Name}, 'Structures'));
+        else
+            sTessNew.iAtlas = 1;
+        end
     end
     % Compress Reg
-    if isfield(sTess, 'Reg')
-        sTessNew.Reg = sTess.Reg;
-        if isfield(sTessNew.Reg, 'Sphere') && isfield(sTessNew.Reg.Sphere, 'Vertices') && ~isempty(sTessNew.Reg.Sphere.Vertices)
-            sTessNew.Reg.Sphere.Vertices = single(sTessNew.Reg.Sphere.Vertices);
-        end
+    if isfield(sTessNew, 'Reg') && isfield(sTessNew.Reg, 'Sphere') && isfield(sTessNew.Reg.Sphere, 'Vertices') && ~isempty(sTessNew.Reg.Sphere.Vertices)
+        sTessNew.Reg.Sphere.Vertices = single(sTessNew.Reg.Sphere.Vertices);
+    end
+    if isfield(sTessNew, 'Reg') && isfield(sTessNew.Reg, 'Sphere') && isfield(sTessNew.Reg.Sphere, 'Vertices') && ~isempty(sTessNew.Reg.Sphere.Vertices)
+        sTessNew.Reg.Sphere.Vertices = single(sTessNew.Reg.Sphere.Vertices);
     end
     % Save file back
     bst_save(TessFile, sTessNew, 'v7');
@@ -116,6 +126,13 @@ SubjectPath = bst_fileparts(AllFiles{1});
 dirTxt = dir(bst_fullfile(SubjectPath, '*.txt'));
 for i = 1:length(dirTxt)
     AllFiles{end+1} = bst_fullfile(SubjectPath, dirTxt(i).name);
+end
+
+% Add extra nii files
+SubjectPath = bst_fileparts(AllFiles{1});
+dirNii = dir(bst_fullfile(SubjectPath, '*.nii*'));
+for i = 1:length(dirTxt)
+    AllFiles{end+1} = bst_fullfile(SubjectPath, dirNii(i).name);
 end
 
 % Get channel files associated with this subject

@@ -13,7 +13,7 @@ function [sFile, ChannelMat] = in_fopen_4d(DataFile, ImportOptions)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -405,13 +405,6 @@ if isfield(header, 'process') && isfield(header.process, 'type')
                 iOcc = length(sFile.events(iEvent).times) + 1;
                 sFile.events(iEvent).epochs(iOcc)   = 1;
                 sFile.events(iEvent).times(iOcc)    = round(evtTime .* sFile.prop.sfreq) ./ sFile.prop.sfreq;
-                if (iOcc == 1)
-                    sFile.events(iEvent).channels = {{}};
-                    sFile.events(iEvent).notes    = {[]};
-                else
-                    sFile.events(iEvent).channels{iOcc} = {};
-                    sFile.events(iEvent).notes{iOcc}    = [];
-                end
             end
         end
     end

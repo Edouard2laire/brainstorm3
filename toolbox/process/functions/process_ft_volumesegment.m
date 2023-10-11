@@ -8,7 +8,7 @@ function varargout = process_ft_volumesegment( varargin )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -34,13 +34,13 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Comment     = 'Segment MRI with FieldTrip (ft_volumesegment)';
     sProcess.Category    = 'Custom';
     sProcess.SubGroup    = {'Import', 'Import anatomy'};
-    sProcess.Index       = 32;
+    sProcess.Index       = 38;
     sProcess.Description = 'http://www.fieldtriptoolbox.org/faq/how_is_the_segmentation_defined';
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'import', 'data'};
     sProcess.OutputTypes = {'import', 'data'};
     sProcess.nInputs     = 1;
-    sProcess.nMinFiles   = 1;
+    sProcess.nMinFiles   = 0;
     % Option: Subject name
     sProcess.options.subjectname.Comment    = 'Subject name:';
     sProcess.options.subjectname.Type       = 'subjectname';

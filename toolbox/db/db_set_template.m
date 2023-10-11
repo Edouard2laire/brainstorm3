@@ -2,17 +2,19 @@ function db_set_template( iSubject, sTemplate, isInteractive )
 % DB_SET_TEMPLATE: Copy all the files from an anatomy template in any anatomy directory.
 %
 % USAGE:  db_set_template( iSubject, sTemplate, isInteractive=1 );
+%         db_set_template( iSubject, TemplateName, isInteractive=1);
 %
 % INPUT: 
 %    - iSubject      : Subject indice in protocol definition (default anatomy: iSubject=0)
-%    - sTemplate     : Path to the anatomy template (zip file, folder or URL)
+%    - sTemplate     : Struct including the path to the anatomy template (zip file, folder or URL)
+%    - TemplateName  : String identifying the name of an anatomy template, as returned by bst_get('AnatomyDefaults')
 %    - isInteractive : If 1, asks for confirmation and open the MRI Viewer for fiducials verification (default is 1)
 
 % @=============================================================================
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -26,7 +28,7 @@ function db_set_template( iSubject, sTemplate, isInteractive )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2008-2013
+% Authors: Francois Tadel, 2008-2022
 
 
 %% ===== TARGET SUBJECT =====
@@ -48,6 +50,14 @@ end
 
 
 %% ===== GET TEMPLATE =====
+% If template selection is a string: get the template structure
+if ischar(sTemplate)
+    TemplateName = sTemplate;
+    sTemplate = bst_get('AnatomyDefaults', TemplateName);
+    if isempty(sTemplate)
+        error(['Invalid template name: ' TemplateName]);
+    end
+end
 % Directory: just copy from it
 if isdir(sTemplate.FilePath)
     templateDir = sTemplate.FilePath;
@@ -67,8 +77,12 @@ else
         errMsg = gui_brainstorm('DownloadFile', sTemplate.FilePath, ZipFile, 'Download template');
         % Error message
         if ~isempty(errMsg)
-            bst_error(['Impossible to download template:' 10 errMsg], 'Download error', 0);
-            return
+            if isInteractive
+                bst_error(['Impossible to download template:' 10 errMsg], 'Download error', 0);
+                return
+            else
+                error(['Impossible to download template: ' errMsg]);
+            end
         end
     elseif ~isempty(strfind(sTemplate.FilePath, '.zip'))
         ZipFile = sTemplate.FilePath;
@@ -168,11 +182,11 @@ if isDeleteDir
     file_delete(templateDir, 1, 3);
 end
 
-%% ===== CHECK FIDUCIALS =====
-if isInteractive && ~isempty(sSubject.Anatomy)
-    % DEFAULT ANAT: Check if the positions of the fiducials have been validated
-     figure_mri('FiducialsValidation', sSubject.Anatomy(1).FileName);
-end
+% %% ===== CHECK FIDUCIALS =====
+% if isInteractive && ~isempty(sSubject.Anatomy)
+%     % DEFAULT ANAT: Check if the positions of the fiducials have been validated
+%     figure_mri('FiducialsValidation', sSubject.Anatomy(1).FileName);
+% end
 
 
 

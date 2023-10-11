@@ -8,13 +8,14 @@ function varargout = gui_brainstorm( varargin )
 %                   gui_brainstorm('DeleteProtocol', ProtocolName)
 %                   gui_brainstorm('SetExplorationMode', ExplorationMode)    % ExplorationMode = {'Subjects','StudiesSubj','StudiesCond'}
 % BrainstormDbDir = gui_brainstorm('SetDatabaseFolder')
+%       isDeleted = gui_brainstorm('EmptyTempFolder', isUserConfirm=0)
 %  [keyEvent,...] = gui_brainstorm('ConvertKeyEvent', ev)
 
 % @=============================================================================
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -28,7 +29,7 @@ function varargout = gui_brainstorm( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2008-2021
+% Authors: Francois Tadel, 2008-2023
 
 eval(macro_method);
 end
@@ -162,19 +163,10 @@ function GUI = CreateWindow() %#ok<DEFNU>
         jMenuUpdate = gui_component('Menu', jMenuBar, [], ' Update ', [], [], [], fontSize);
         % UPDATE BRAINSTORM
         gui_component('MenuItem', jMenuUpdate, [], 'Update Brainstorm', IconLoader.ICON_RELOAD, [], @(h,ev)bst_update(1), fontSize);
-        % UPDATE NIRSTORM
-        if (GlobalData.Program.GuiLevel == 1)
-            jMenuNirsorm = gui_component('Menu', jMenuUpdate, [], 'Update NIRSTORM', IconLoader.ICON_RELOAD, [], [], fontSize);
-            if exist('process_nst_install', 'file') && process_nst_install('status')
-                % Add nirstorm function folder in matlab path
-                addpath(bst_fullfile( bst_get('BrainstormUserDir'), 'nirstorm' ));
-                gui_component('MenuItem', jMenuNirsorm, [], 'Update', [], [], @(h,ev)process_nst_install('install',[],[],1), fontSize);
-                gui_component('MenuItem', jMenuNirsorm, [], 'Uninstall', [], [], @(h,ev)process_nst_install('uninstall'), fontSize);
-            else
-                gui_component('MenuItem', jMenuNirsorm, [], 'Download', [], [], @(h,ev)process_nst_install('install',[],[],1), fontSize);
-            end
-            gui_component('MenuItem', jMenuNirsorm, [], 'NIRSTORM help', [], [], @(h,ev)web('https://github.com/Nirstorm/nirstorm/wiki', '-browser'), fontSize);
-        end       
+        % REPRODUCIBILITY
+        jMenuUpdate.addSeparator();
+        jMenuRepro = gui_component('Menu', jMenuUpdate, [], ' Reproducibility', IconLoader.ICON_PROCESS, [], [], fontSize);
+        gui_component('MenuItem', jMenuRepro, [], 'Export software environment', IconLoader.ICON_SAVE, [], @(h,ev)bst_call(@bst_plugin, 'Archive'), fontSize);
     end
     
     % ==== Menu PLUGINS ====
@@ -196,8 +188,9 @@ function GUI = CreateWindow() %#ok<DEFNU>
         % LICENSE
         gui_component('MenuItem', jMenuSupport, [], 'License',       IconLoader.ICON_EDIT, [], @(h,ev)bst_license(), fontSize);
         % RELEASE NOTES
-        updatesfile = bst_fullfile(bst_get('BrainstormDocDir'), 'updates.txt');
-        gui_component('MenuItem', jMenuSupport, [], 'Release notes', IconLoader.ICON_EDIT, [], @(h,ev)view_text(updatesfile, 'Release notes', 1), fontSize);
+        updatesfiles = {bst_fullfile(bst_get('BrainstormDocDir'), 'updates.txt'), ...
+                        bst_fullfile(bst_get('BrainstormDocDir'), 'updates_2020.txt')};
+        gui_component('MenuItem', jMenuSupport, [], 'Release notes', IconLoader.ICON_EDIT, [], @(h,ev)view_text(updatesfiles, 'Release notes', 1), fontSize);
         jMenuSupport.addSeparator();
         % Prepare workshop
         gui_component('MenuItem', jMenuSupport, [], 'Workshop preparation', IconLoader.ICON_SCREEN1, [], @(h,ev)brainstorm('workshop'), fontSize);
@@ -555,6 +548,9 @@ function GUI = CreateWindow() %#ok<DEFNU>
             elseif (jToolButtonStudiesCond.isSelected())
                 ExplorationMode = 'StudiesCond';
             end
+            % Save current exploration mode (for tracking of selected nodes)
+            PreviousExplorationMode = bst_get('Layout', 'ExplorationMode');
+            bst_set('Layout', 'PreviousExplorationMode', PreviousExplorationMode);
             % Update the Layout structure
             bst_set('Layout', 'ExplorationMode', ExplorationMode);
             % Update tree display
@@ -1195,6 +1191,8 @@ function ShowToolTab(tabTitle)
             panel_surface('UpdatePanel');
         case 'iEEG'
             panel_ieeg('UpdatePanel');
+        case 'Cluster'
+            panel_cluster('UpdatePanel');
     end
     % Select tab
     SetSelectedTab(tabTitle, 0);
@@ -1383,24 +1381,66 @@ end
 
 
 %% ===== EMPTY TEMPORARY FOLDER =====
-function isDeleted = EmptyTempFolder()
+% USAGE:  isDeleted = gui_brainstorm('EmptyTempFolder', isUserConfirm=0)
+function isDeleted = EmptyTempFolder(isUserConfirm)
+    % Parse inputs
+    if (nargin < 1) || isempty(isUserConfirm)
+        isUserConfirm = 0;
+    end
+    isDeleted = 0;
     % Get temporary directory
-    tmpDir = bst_get('BrainstormTmpDir');
+    TmpDir = bst_get('BrainstormTmpDir');
+    % If directory doesn't exist
+    if ~isdir(TmpDir)
+        return;
+    end
     % Make sure Matlab is not currently in a subfolder of the temp directory
-    if ~isempty(strfind(pwd, tmpDir)) && ~file_compare(pwd, tmpDir)
-        cd(tmpDir);
+    if ~isempty(strfind(pwd, TmpDir)) && ~file_compare(pwd, TmpDir)
+        cd(TmpDir);
     end
-    % If directory exists
-    if isdir(tmpDir)
-        disp('BST> Emptying temporary directory...');
-        % Delete contents of directory
-        tmpFiles = dir(bst_fullfile(tmpDir, '*'));
-        tmpFiles = setdiff({tmpFiles.name}, {'.','..'});
-        tmpFiles = cellfun(@(c)bst_fullfile(tmpDir,c), tmpFiles, 'UniformOutput', 0);
-        isDeleted = file_delete(tmpFiles, 1, 3);
-    else 
-        isDeleted = 0;
+
+    % Get contents of directory
+    tmpFiles = dir(bst_fullfile(TmpDir, '*'));
+    tmpFiles = setdiff({tmpFiles.name}, {'.','..'});
+    % If there are no files in the temp folder
+    if isempty(tmpFiles)
+        return;
     end
+    % Ask user confirmation
+    if isUserConfirm
+        % Prepare message
+        strTitle = sprintf('The temporary directory contains %d file(s):', length(tmpFiles));
+        strList = '';
+        NMAX = 15;
+        for iFile = 1:min(NMAX, length(tmpFiles))
+            strList = [strList, 10, ' |- ', tmpFiles{iFile}];
+        end
+        if (length(tmpFiles) > NMAX)
+            strList = [strList, 10, ' |- ...'];
+        end
+        % GUI: Show dialog message
+        if (bst_get('GuiLevel') == 1)
+            isConfirmed = java_dialog('confirm', ['<HTML>' strTitle, '<BR><FONT color="#707070"><PRE>', TmpDir, filesep, strrep(strList,char(10),'<BR>'), '</PRE></FONT><BR>', ...
+                'They might still be in use from other processes.<BR>', ...
+                'Delete all these files now?<BR><BR>'], 'Delete temporary files');
+            if ~isConfirmed
+                return;
+            end
+        % No GUI: Generate warning and reject deletion
+        else
+            strWarning = ['WARNING: ', strTitle, 10, TmpDir, filesep, strList, 10, 'If these files are not in use from another process, they will not be deleted automatically.', 10 ...
+                'To delete all the temporary files, add the following command to your script: ' 10 ...
+                'gui_brainstorm(''EmptyTempFolder'');'];
+            % Display warning in Matlab command window
+            disp([strrep(strWarning, char(10), [char(10), 'BST> ']), 10]);
+            return;
+        end
+    end
+    % Get full path
+    tmpFiles = cellfun(@(c)bst_fullfile(TmpDir,c), tmpFiles, 'UniformOutput', 0);
+    % Delete files
+    disp('BST> Emptying temporary directory...');
+    isDeleted = file_delete(tmpFiles, 1, 1);
 end
 
 
@@ -1536,6 +1576,9 @@ function errMsg = DownloadFile(srcUrl, destFile, wndTitle, imgFile) %#ok<DEFNU>
             if file_exist(destFile)
                 file_delete(destFile, 1);
             end
+            % Tries downloading without progress bar
+            bst_progress('text', 'Downloading...');
+            errMsg = bst_websave(destFile, srcUrl);
         end
     end
 end
@@ -1628,13 +1671,15 @@ function status = CloneProble(bstDir)
             status = 0;
             return;
         end
-        % Connect
+        % Check password through HTTPS
+        % | Note that on older Matlab, HTTPS doesn't work:
+        % | https://github.com/brainstorm-tools/brainstorm3/issues/308#issuecomment-646026943
         bst_progress('start', 'Brainstorm login', 'Contacting server');
         try
             % Send connect request
             header = matlab.net.http.field.ContentTypeField('application/x-www-form-urlencoded');
-            options = matlab.net.http.HTTPOptions();
-            request = matlab.net.http.RequestMessage(matlab.net.http.RequestMethod.POST, header, ['email=',res{1},'&mdp=',res{2}]);
+            options = matlab.net.http.HTTPOptions('CertificateFilename','');
+            request = matlab.net.http.RequestMessage(matlab.net.http.RequestMethod.POST, header, ['email=',urlencode(res{1}),'&mdp=',urlencode(res{2})]);
             resp = send(request, 'https://neuroimage.usc.edu/bst/check_user.php', options);
             % Check server response
             if isempty(resp) || isempty(resp.Body) || ~isa(resp.Body, 'matlab.net.http.MessageBody')
@@ -1645,6 +1690,11 @@ function status = CloneProble(bstDir)
                 bst_error('Invalid username or password.', 'Brainstorm login', 0);
             end
         catch
+            bst_error();
+            bst_error(['Could not establish a secure connection to Brainstorm server.' 10 10 ...
+                'Password verification over HTTPS requires Matlab >= 2020a.' 10 ...
+                'Download Brainstorm from the website: https://neuroimage.usc.edu/brainstorm' 10 ...
+                'Update it from the interface, or from the command line with "brainstorm update".' 10], 'Brainstorm login', 0);
             status = 0;
         end
         bst_progress('stop');

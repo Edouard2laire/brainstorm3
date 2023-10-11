@@ -1,7 +1,7 @@
 function [DirectPAC, LowFreqs, HighFreqs] = bst_pac(F, sRate, bandNesting, bandNested, isUseParallel, isUseMex, numfreqs)
 % BST_PAC: Calculate the DirectPAC metric for all the input time series.
 %
-% USAGE:  sPAC = bst_pac(F, sRate, bandNesting, bandNested, isUseParallel=0, isUseMex=0, numfreqs=[])
+% USAGE: [DirectPAC, NestingFreqs, NestedFreqs] = bst_pac(F, sRate, bandNesting, bandNested, isUseParallel=0, isUseMex=0, numfreqs=[])
 % 
 % INPUTS:
 %    - F             : Signal time series [nSignals x nTime]
@@ -15,9 +15,10 @@ function [DirectPAC, LowFreqs, HighFreqs] = bst_pac(F, sRate, bandNesting, bandN
 %    - numfreqs      : Number of frequency bins to use (if 0 or empty, use round(sRate/9))
 % 
 % OUTPUTS:
-%    - DirectPAC   : Full array of direct PAC measures for all frequyency pairs
-%    - LowFreqs    : List of nesting frequency for the DirectPAC maps (frequency for phase)
-%    - NestedFreq  : List of nested frequency for the DirectPAC maps (frequency for amplitude)
+%    - DirectPAC    : Full array of direct PAC measures for all frequency pairs
+%                     [nSignals, nTime=1, nNestingFreqs, nNestedFreqs]
+%    - NestingFreqs : List of nesting frequency for the DirectPAC maps (frequency for phase)
+%    - NestedFreq   : List of nested frequency for the DirectPAC maps (frequency for amplitude)
 %
 % DOCUMENTATION:
 %    - For more information, please refer to the method described in the following article:
@@ -33,7 +34,7 @@ function [DirectPAC, LowFreqs, HighFreqs] = bst_pac(F, sRate, bandNesting, bandN
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.

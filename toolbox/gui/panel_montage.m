@@ -8,7 +8,7 @@ function varargout = panel_montage(varargin)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -22,7 +22,7 @@ function varargout = panel_montage(varargin)
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2009-2019
+% Authors: Francois Tadel, 2009-2023
 
 eval(macro_method);
 end
@@ -964,7 +964,7 @@ function LoadDefaultMontages() %#ok<DEFNU>
     sMontage.Type = 'selection';
     SetMontage(sMontage.Name, sMontage);
     % Get the path to the default .sel/.mon files
-    MontagePath = bst_fullfile(bst_get('BrainstormHomeDir'), 'toolbox', 'sensors', 'private');    
+    MontagePath = bst_fullfile(bst_fileparts(which('panel_channel_editor')), 'private');    
     % Load MNE selection files
     MontageFiles = dir(bst_fullfile(MontagePath, '*.sel'));
     for i = 1:length(MontageFiles)
@@ -1871,8 +1871,6 @@ function sMontages = LoadMontageFiles(FileNames, FileFormat, isOverwrite)
                 sMon = in_montage_mne(FileNames{iFile});
             case 'MON'
                 sMon = in_montage_mon(FileNames{iFile});
-            case 'EEG-COMPUMEDICS-PFS'
-                sMon = in_montage_compumedics(FileNames{iFile});
             case 'BST'
                 DataMat = load(FileNames{iFile});
                 sMon = DataMat.Montages;
@@ -2053,11 +2051,20 @@ function [AllGroups, AllTags, AllInd, isNoInd] = ParseSensorNames(Channels)
     if ~isempty(iInd)
         % Get unique tags
         uniqueTags = unique(AllTags(iInd));
-        % Check for each of them: if 11 is the first index, include the first digit in the group name
+        % Check for each of them: if all the indices start with the same digit, include the first digit in the group name
         for iTag = 1:length(uniqueTags)
             iChTag = find(strcmpi(AllTags(iInd), uniqueTags{iTag}));
             chInd = cellfun(@str2num, AllInd(iInd(iChTag)));
-            if all(chInd >= 10) && all(chInd <= 49) && (length(chInd) > 4)
+            if (length(chInd) > 4) && ...
+               (all(((chInd >= 11) & (chInd <= 19)) | ((chInd >= 100) & (chInd <= 199))) || ...
+                all(((chInd >= 21) & (chInd <= 29)) | ((chInd >= 200) & (chInd <= 299))) || ...
+                all(((chInd >= 31) & (chInd <= 39)) | ((chInd >= 300) & (chInd <= 399))) || ...
+                all(((chInd >= 41) & (chInd <= 49)) | ((chInd >= 400) & (chInd <= 499))) || ...
+                all(((chInd >= 51) & (chInd <= 59)) | ((chInd >= 500) & (chInd <= 599))) || ...
+                all(((chInd >= 61) & (chInd <= 69)) | ((chInd >= 600) & (chInd <= 699))) || ...
+                all(((chInd >= 71) & (chInd <= 79)) | ((chInd >= 700) & (chInd <= 799))) || ...
+                all(((chInd >= 81) & (chInd <= 89)) | ((chInd >= 800) & (chInd <= 899))) || ...
+                all(((chInd >= 91) & (chInd <= 99)) | ((chInd >= 900) & (chInd <= 999))))
                 for i = iInd(iChTag)
                     AllTags{i} = [AllTags{i}, AllInd{i}(1)];
                     AllInd{i}  = AllInd{i}(2:end);

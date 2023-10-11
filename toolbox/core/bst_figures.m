@@ -7,7 +7,6 @@ function varargout = bst_figures( varargin )
 %        [hFigs,iFigs,iDSs] = bst_figures('GetFigure',        iDS,      FigureId)
 %        [hFigs,iFigs,iDSs] = bst_figures('GetFigure',        DataFile, FigureId)
 %        [hFigs,iFigs,iDSs] = bst_figures('GetFigure',        hFigure)
-
 %                   [hFigs] = bst_figures('GetAllFigures')
 % [hFigs,iFigs,iDSs,iSurfs] = bst_figures('GetFigureWithSurface', SurfFile)
 % [hFigs,iFigs,iDSs,iSurfs] = bst_figures('GetFigureWithSurface', SurfFile, DataFile, FigType, Modality)
@@ -40,7 +39,7 @@ function varargout = bst_figures( varargin )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -54,7 +53,7 @@ function varargout = bst_figures( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2008-2019
+% Authors: Francois Tadel, 2008-2023
 %          Martin Cousineau, 2017
 
 eval(macro_method);
@@ -86,7 +85,7 @@ function [hFig, iFig, isNewFig] = CreateFigure(iDS, FigureId, CreateMode, Constr
         % If at least one valid figure was found
         if ~isempty(hFigures)
             % Refine selection for certain types of figures
-            if ~isempty(Constrains) && ischar(Constrains) && ismember(FigureId.Type, {'Timefreq', 'Spectrum', 'Connect', 'Pac'})
+            if ~isempty(Constrains) && ischar(Constrains) && ismember(FigureId.Type, {'Timefreq', 'Spectrum', 'Connect', 'Pac'}) 
                 for i = 1:length(hFigures)
                     TfInfo = getappdata(hFigures(i), 'Timefreq');
                     if ~isempty(TfInfo) && file_compare(TfInfo.FileName, Constrains)
@@ -218,6 +217,9 @@ function [hFig, iFig, isNewFig] = CreateFigure(iDS, FigureId, CreateMode, Constr
     [selChan,errMsg] = GetChannelsForFigure(iDS, iFig);
     % Error message
     if ~isempty(errMsg)
+        if isNewFig
+            GlobalData.DataSet(iDS).Figure(iFig) = [];
+        end
         error(errMsg);
     end
     % Save selected channels for this figure
@@ -614,7 +616,7 @@ function [hFigures, iFigures, iDataSets, iSurfaces] = GetFigureWithSurface(Surfa
     % Parse inputs
     if (nargin < 4)
         DataFile = '';
-        FigType  = '3DViz';
+        FigType  = '';
         Modality = '';
     end
     % Process all DataSets
@@ -622,35 +624,40 @@ function [hFigures, iFigures, iDataSets, iSurfaces] = GetFigureWithSurface(Surfa
         % Process all figures of this dataset
         for iFig = 1:length(GlobalData.DataSet(iDS).Figure)
             Figure = GlobalData.DataSet(iDS).Figure(iFig);
-            % Look only in 3DViz figures (there cannot be surfaces displayed in other widow types)
-            % and figures that have the appropriate Modality
-            if strcmpi(Figure.Id.Type, FigType) && (isempty(Modality) || strcmpi(Figure.Id.Modality, Modality))
-                % Get surfaces list
-                TessInfo = getappdata(Figure.hFigure, 'Surface');
-                % Look for surface
-                for iTess = 1:length(TessInfo)
-                    % If the surface contain registered spheres: skip
-                    if ~isempty(TessInfo(iTess).SurfaceFile) && ~isempty(strfind(TessInfo(iTess).SurfaceFile, '|reg'))
-                        isSurfFileOk = 0;
-                    % Check if the (or one of the) surface file is valid
-                    elseif iscell(SurfaceFile)
-                        isSurfFileOk = 0;
-                        i = 1;
-                        while (i <= length(SurfaceFile) && ~isSurfFileOk)
-                            isSurfFileOk = file_compare(TessInfo(iTess).SurfaceFile, SurfaceFile{i});
-                            i = i + 1;
-                        end
-                    else
-                        isSurfFileOk = file_compare(TessInfo(iTess).SurfaceFile, SurfaceFile);
+            % If not specified, look in 3DViz+Topography figures, and figures that have the appropriate Modality
+            if ~isempty(Modality) && ~strcmpi(Figure.Id.Modality, Modality)
+                continue;
+            elseif ~isempty(FigType) && ~strcmpi(Figure.Id.Type, FigType)
+                continue;
+            elseif isempty(FigType) && ~ismember(Figure.Id.Type, {'3DViz', 'Topography'})
+                continue;
+            elseif isempty(FigType) && strcmpi(Figure.Id.Type, 'Topography') && ~strcmpi(Figure.Id.SubType, '3DElectrodes')
+                continue;
+            end
+            % Get surfaces list
+            TessInfo = getappdata(Figure.hFigure, 'Surface');
+            % Look for surface
+            for iTess = 1:length(TessInfo)
+                % If the surface contain registered spheres: skip
+                if ~isempty(TessInfo(iTess).SurfaceFile) && ~isempty(strfind(TessInfo(iTess).SurfaceFile, '|reg'))
+                    isSurfFileOk = 0;
+                % Check if the (or one of the) surface file is valid
+                elseif iscell(SurfaceFile)
+                    isSurfFileOk = 0;
+                    i = 1;
+                    while (i <= length(SurfaceFile) && ~isSurfFileOk)
+                        isSurfFileOk = file_compare(TessInfo(iTess).SurfaceFile, SurfaceFile{i});
+                        i = i + 1;
                     end
-                    % If figure is accepted: add it to the list
-                    if isSurfFileOk && (isempty(DataFile) ...
-                                        || file_compare(TessInfo(iTess).DataSource.FileName, DataFile))
-                        hFigures  = [hFigures,  Figure.hFigure];
-                        iFigures  = [iFigures,  iFig];
-                        iDataSets = [iDataSets, iDS];
-                        iSurfaces = [iSurfaces, iTess];
-                    end
+                else
+                    isSurfFileOk = file_compare(TessInfo(iTess).SurfaceFile, SurfaceFile);
+                end
+                % If figure is accepted: add it to the list
+                if isSurfFileOk && (isempty(DataFile) || file_compare(TessInfo(iTess).DataSource.FileName, DataFile))
+                    hFigures  = [hFigures,  Figure.hFigure];
+                    iFigures  = [iFigures,  iFig];
+                    iDataSets = [iDataSets, iDS];
+                    iSurfaces = [iSurfaces, iTess];
                 end
             end
         end
@@ -888,10 +895,7 @@ function DeleteFigure(hFigure, varargin)
         	panel_dipoles('UpdatePanel');
         end
     end
-    % If figure is an OpenGL connectivty graph: call the destructor
-    if strcmpi(Figure.Id.Type, 'Connect')
-        figure_connect('Dispose', hFigure);
-    end
+
     % Delete graphic object
     if ishandle(hFigure)
         delete(hFigure);
@@ -1074,10 +1078,12 @@ function SetCurrentFigure(hFig, Type)
             panel_record('CurrentFigureChanged_Callback', hFig);
             % Update tab: Display (for raster plots/erpimage)
             panel_display('UpdatePanel', hFig);
-%             FigureId = getappdata(hFig, 'FigureId');
-%             if ~isempty(FigureId) && isequal(FigureId.SubType, 'erpimage')
-%                 panel_display('UpdatePanel', hFig);
-%             end
+            % Update list of clusters
+            if ~isempty(hFig) && ~isequal(oldFigType, hFig)
+                if gui_brainstorm('isTabVisible', 'Cluster')
+                    panel_cluster('CurrentFigureChanged_Callback', hFig);
+                end
+            end
         case 'Type3D'
             % Only when figure changed (within the figure type)
             if ~isempty(hFig) && ~isequal(oldFigType, hFig)
@@ -1094,6 +1100,9 @@ function SetCurrentFigure(hFig, Type)
                 end
                 if gui_brainstorm('isTabVisible', 'iEEG')
                     panel_ieeg('CurrentFigureChanged_Callback', hFig);
+                end
+                if gui_brainstorm('isTabVisible', 'Cluster')
+                    panel_cluster('CurrentFigureChanged_Callback', hFig);
                 end
             end
         case 'TypeTF'
@@ -1353,13 +1362,17 @@ function hNewFig = CloneFigure(hFig)
             GlobalData.DataSet(iDS).Figure(iNewFig).Handles.Wmat        = GlobalData.DataSet(iDS).Figure(iFig).Handles.Wmat;
             GlobalData.DataSet(iDS).Figure(iNewFig).Handles.DataMinMax  = GlobalData.DataSet(iDS).Figure(iFig).Handles.DataMinMax;
         end
+        % 2DDisc: Set white background
+        if strcmpi(FigureId.Type, 'Topography') && strcmpi(FigureId.SubType, '2DDisc')
+            SetBackgroundColor(hNewFig, [1 1 1]);
+        end
         % Delete scouts
         delete(findobj(hNewAxes, 'Tag', 'ScoutLabel'));
         delete(findobj(hNewAxes, 'Tag', 'ScoutMarker'));
         delete(findobj(hNewAxes, 'Tag', 'ScoutPatch'));
         delete(findobj(hNewAxes, 'Tag', 'ScoutContour'));
         % Update current figure selection
-        if strcmpi(FigureId.Type, '3DViz') || strcmpi(FigureId.SubType, '3DSensorCap')
+        if strcmpi(FigureId.Type, '3DViz') || strcmpi(FigureId.SubType, '3DSensorCap') || strcmpi(FigureId.SubType, '3DOptodes')
             SetCurrentFigure(hNewFig, '3D');
         else
             SetCurrentFigure(hNewFig);
@@ -1379,6 +1392,10 @@ function hNewFig = CloneFigure(hFig)
         end
         % Update Surfaces panel
         panel_surface('UpdatePanel');
+        % Reload figure to apply montage (Topology NIRS)
+        if strcmpi(FigureId.Type, 'Topography') && strcmpi(FigureId.Modality, 'NIRS')
+            ReloadFigures(hNewFig, 0);
+        end
         
     % ===== TIME SERIES =====
     elseif strcmpi(FigureId.Type, 'DataTimeSeries')
@@ -1699,7 +1716,7 @@ function isValid = isFigureId(FigureId)
             isfield(FigureId, 'Type') && ...
             isfield(FigureId, 'SubType') && ...
             isfield(FigureId, 'Modality') && ...
-            ismember(FigureId.Type, {'DataTimeSeries', 'ResultsTimeSeries', 'Topography', '3DViz', 'MriViewer', 'Timefreq', 'Spectrum', 'Pac', 'Connect', 'Image'}));
+            ismember(FigureId.Type, {'DataTimeSeries', 'ResultsTimeSeries', 'Topography', '3DViz', 'MriViewer', 'Timefreq', 'Spectrum', 'Pac', 'Connect', 'Image'}))
         isValid = 1;
     else
         isValid = 0;
@@ -1789,9 +1806,9 @@ function ReloadFigures(FigureTypes, isFastUpdate, isResetAxes)
                         % Nothing to do
                     elseif (Figure.Id.Modality(1) == '$')
                         DataFiles = getappdata(Figure.hFigure, 'DataFiles');
-                        iClusters = getappdata(Figure.hFigure, 'iClusters');
-                        if ~isempty(DataFiles) && ~isempty(iClusters)
-                            view_clusters(DataFiles, iClusters, Figure.hFigure);
+                        ClusterLabels = getappdata(Figure.hFigure, 'ClusterLabels');
+                        if ~isempty(DataFiles) && ~isempty(ClusterLabels)
+                            view_clusters(DataFiles, ClusterLabels, Figure.hFigure);
                         end
                     else
                         % Get original XLim/YLim
@@ -2052,7 +2069,7 @@ function FireSelectedRowChanged()
                 case 'Pac'
                     % Nothing to do
                 case 'Connect'
-                    figure_connect('SelectedRowChangedCallback', iDS, iFig);
+                    % Nothing to do
                 case 'Image'
                     % Nothing to do
                 otherwise

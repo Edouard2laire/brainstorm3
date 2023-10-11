@@ -1,9 +1,9 @@
-function [F, TimeVector] = in_fread(sFile, ChannelMat, iEpoch, SamplesBounds, iChannels, ImportOptions)
+function [F, TimeVector,DisplayUnits] = in_fread(sFile, ChannelMat, iEpoch, SamplesBounds, iChannels, ImportOptions)
 % IN_FREAD: Read a block a data in any recordings file previously opened with in_fopen().
 %
-% USAGE:  [F, TimeVector] = in_fread(sFile, ChannelMat, iEpoch, SamplesBounds, iChannels, ImportOptions);
-%         [F, TimeVector] = in_fread(sFile, ChannelMat, iEpoch, SamplesBounds, iChannels);                 : Do not apply any pre-preprocessings
-%         [F, TimeVector] = in_fread(sFile, ChannelMat, iEpoch, SamplesBounds);                            : Read all channels
+% USAGE:  [F, TimeVector, DisplayUnits] = in_fread(sFile, ChannelMat, iEpoch, SamplesBounds, iChannels, ImportOptions);
+%         [F, TimeVector, DisplayUnits] = in_fread(sFile, ChannelMat, iEpoch, SamplesBounds, iChannels);                 : Do not apply any pre-preprocessings
+%         [F, TimeVector, DisplayUnits] = in_fread(sFile, ChannelMat, iEpoch, SamplesBounds);                            : Read all channels
 %
 % INPUTS:
 %     - sFile         : Structure for importing files in Brainstorm. Created by in_fopen()
@@ -15,12 +15,13 @@ function [F, TimeVector] = in_fread(sFile, ChannelMat, iEpoch, SamplesBounds, iC
 % OUTPUTS:
 %     - F          : [nChannels x nTimes], block of recordings
 %     - TimeVector : [1 x nTime], time values in seconds
+%     - DisplayUnits : char, unit of the recording
 
 % @=============================================================================
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -34,7 +35,9 @@ function [F, TimeVector] = in_fread(sFile, ChannelMat, iEpoch, SamplesBounds, iC
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2009-2021
+% Authors: Francois Tadel, 2009-2022
+%          Raymundo Cassani, 2022
+
 
 %% ===== PARSE INPUTS =====
 if (nargin < 6)
@@ -62,7 +65,7 @@ end
 
 %% ===== OPEN FILE =====
 % Open file (for some formats, it is open in the low-level function)
-if ismember(sFile.format, {'FIF', 'CTF', 'KIT', 'RICOH', 'BST-DATA', 'SPM-DAT', 'EEG-ANT-CNT', 'EEG-EEGLAB', 'EEG-GTEC', 'EEG-NEURONE', 'EEG-NEURALYNX', 'EEG-NICOLET', 'EEG-BLACKROCK', 'EEG-RIPPLE', 'EYELINK', 'NIRS-BRS', 'EEG-EGI-MFF', 'MNE-PYTHON'}) 
+if ismember(sFile.format, {'FIF', 'CTF', 'KIT', 'RICOH', 'BST-DATA', 'SPM-DAT', 'EEG-ANT-CNT', 'EEG-AXION', 'EEG-EEGLAB', 'EEG-GTEC', 'EEG-NEURONE', 'EEG-NEURALYNX', 'EEG-NICOLET', 'EEG-BLACKROCK', 'EEG-RIPPLE', 'EYELINK', 'NIRS-BRS', 'EEG-EGI-MFF', 'MNE-PYTHON'}) 
     sfid = [];
 else
     sfid = fopen(sFile.filename, 'r', sFile.byteorder);
@@ -76,6 +79,7 @@ else
 end
 
 %% ===== READ RECORDINGS BLOCK =====
+DisplayUnits = [];
 switch (sFile.format)
     case 'FIF'
         [F,TimeVector] = in_fread_fif(sFile, iEpoch, SamplesBounds, iChannels);
@@ -109,6 +113,10 @@ switch (sFile.format)
         if ~isempty(iChannels)
             F = F(iChannels,:);
         end
+    case 'EEG-AXION'
+        F = in_fread_axion(sFile, SamplesBounds, iChannels, precision);
+    case 'EEG-BCI2000'
+        F = in_fread_bci2000(sFile, SamplesBounds);
     case {'EEG-BLACKROCK', 'EEG-RIPPLE'}
         F = in_fread_blackrock(sFile, SamplesBounds, iChannels, precision);
     case 'EEG-BRAINAMP'
@@ -207,6 +215,14 @@ switch (sFile.format)
             iChannels = 1:size(sFile.header.F,1);
         end
         F = sFile.header.F(iChannels, iTimes);
+        % Load display units
+        if ~isempty(sFile.filename)
+            DataMat = load(sFile.filename, 'DisplayUnits');
+            if isfield(DataMat, 'DisplayUnits') && ~isempty(DataMat.DisplayUnits)
+                DisplayUnits = DataMat.DisplayUnits;
+            end
+        end
+
     case 'EEG-INTAN'
         F = in_fread_intan(sFile, SamplesBounds, iChannels, precision);
     case 'EEG-PLEXON'
@@ -329,6 +345,13 @@ if ~isempty(ImportOptions) && ~isempty(ImportOptions.RemoveBaseline)
             iChanBl = find(~ismember(lower({ChannelMat.Channel.Type}), {'stim','video','sysclock'}));
         else
             iChanBl = 1:size(F,1);
+        end
+        % Sensor selection for the baseline correction
+        if ~isempty(ImportOptions) && isfield(ImportOptions, 'BaselineSensorType') && ~isempty(ImportOptions.BaselineSensorType)
+            % Select channels based on sensor types (or names) for baseline correction
+            iChanBlSensorType = channel_find(ChannelMat.Channel, ImportOptions.BaselineSensorType);
+            % Selected channels minus excluded
+            iChanBl = intersect(iChanBlSensorType, iChanBl);
         end
         % Compute baseline
         blValue = mean(F(iChanBl,iTimesBl), 2);

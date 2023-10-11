@@ -7,7 +7,7 @@ function [sFile, ChannelMat] = in_fopen_eyelink(DataFile)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -221,8 +221,8 @@ for i = 1:length(events)
         events(i).times = round(events(i).times .* sFile.prop.sfreq) ./ sFile.prop.sfreq;
     end
     % Add channels and notes fields
-    events(i).channels = cell(1, size(events(i).times, 2));
-    events(i).notes    = cell(1, size(events(i).times, 2));
+    events(i).channels = [];
+    events(i).notes    = [];
 end
 
 % Import this list

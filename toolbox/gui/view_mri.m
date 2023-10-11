@@ -1,7 +1,8 @@
 function [hFig, iDS, iFig] = view_mri(MriFile, OverlayFile, Modality, isNewFig)
 % VIEW_MRI: Display a MRI in a MriViewer figure.
 %
-% USAGE:  view_mri(MriFile, OverlayFile, Modality, isNewFig=0)
+% USAGE:  view_mri(MriFile, OverlayFile=[], Modality=[], isNewFig=0)
+%         view_mri([],      OverlayFile,    Modality=[], isNewFig=0)
 %         view_mri(MriFile, 'EditMri')
 %         view_mri(MriFile, 'EditFiducials')
 %
@@ -12,6 +13,7 @@ function [hFig, iDS, iFig] = view_mri(MriFile, OverlayFile, Modality, isNewFig)
 %     - 'EditMri'       : Show the control to modify the MRI and the fiducials
 %     - 'EditFiducials' : Show the control to modify the fiducials only
 %     - isNewFig        : If 1, forces new figure creation (do not re-use a previously created figure)
+%                         If 2, creates new figure only if there are already sensors loaded in the existing figure
 %
 % OUTPUT : 
 %     - hFig : Matlab handle to the figure that was created or updated
@@ -23,7 +25,7 @@ function [hFig, iDS, iFig] = view_mri(MriFile, OverlayFile, Modality, isNewFig)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -37,7 +39,7 @@ function [hFig, iDS, iFig] = view_mri(MriFile, OverlayFile, Modality, isNewFig)
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2009-2020
+% Authors: Francois Tadel, 2009-2022
 
 
 %% ===== PARSE INPUTS =====
@@ -87,6 +89,19 @@ switch lower(FileType)
         if ~isempty(iDSResult)
             bst_memory('LoadResultsMatrix', iDS, iDSResult);
         end
+        % Get modality
+        iResChan = GlobalData.DataSet(iDS).Results(iDSResult).GoodChannel;
+        if ~isempty(iResChan)
+            AllModalities = unique({GlobalData.DataSet(iDS).Channel(iResChan).Type});
+            % Replace MEG GRAD+MEG MAG with "MEG"
+            if all(ismember({'MEG GRAD', 'MEG MAG'}, AllModalities))
+                AllModalities{end+1} = 'MEG';
+                AllModalities = setdiff(AllModalities, {'MEG GRAD', 'MEG MAG'});
+            end
+            if ~isempty(AllModalities)
+                Modality = AllModalities{1};
+            end
+        end
         % Get subject file
         SubjectFile = GlobalData.DataSet(iDS).SubjectFile;
         OverlayType = 'Source';
@@ -102,6 +117,9 @@ switch lower(FileType)
         % Get subject file
         SubjectFile = GlobalData.DataSet(iDS).SubjectFile;
         OverlayType = 'Timefreq';
+    case 'headmodel'
+        SubjectFile = '';
+        OverlayType = 'HeadModel';
     case {'cortex', 'innerskull', 'outerskull', 'scalp', 'tess'}
         SubjectFile = '';
         OverlayType = 'Surface';
@@ -112,7 +130,19 @@ switch lower(FileType)
         SubjectFile = '';
 end
 % Get Subject that holds this MRI
-[sSubject, iSubject, iAnatomy] = bst_get('MriFile', MriFile);
+if ~isempty(MriFile)
+    sSubject = bst_get('MriFile', MriFile);
+% If MRI is not provided: get default one
+elseif isempty(OverlayFile) || isempty(SubjectFile)
+    error('Missing input file.');
+else
+    sSubject = bst_get('Subject', SubjectFile);
+    if isempty(sSubject) || isempty(sSubject.Anatomy)
+        error('No MRI available.');
+    end
+    MriFile = sSubject.Anatomy(sSubject.iAnatomy).FileName;
+end
+
 % If subject not available yet
 if isempty(SubjectFile)
     % If this surface does not belong to any subject
@@ -135,10 +165,16 @@ end
 
 %% ===== CREATE FIGURE =====
 bst_progress('start', 'View surface', 'Loading MRI file...');
-if ~isNewFig
-    [hFig, iFig, iOldDataSet, iSurface] = bst_figures('GetFigureWithSurface', MriFile, OverlayFile, 'MriViewer', '');
-else
-    hFig = [];
+switch isNewFig
+    case 0   % Always reuse figure
+        [hFig, iFig, iOldDataSet, iSurface] = bst_figures('GetFigureWithSurface', MriFile, OverlayFile, 'MriViewer', '');
+    case 1   % Always create new figure
+        hFig = [];
+    case 2   % Reuse only if no sensors loaded
+        [hFig, iFig, iOldDataSet, iSurface] = bst_figures('GetFigureWithSurface', MriFile, OverlayFile, 'MriViewer', '');
+        if ~isempty(hFig) && ~isempty(GlobalData.DataSet(iOldDataSet).Figure(iFig).SelectedChannels)
+            hFig = [];
+        end
 end
 % Make sure that only one figure was found
 if ~isempty(hFig)
@@ -181,9 +217,7 @@ elseif isempty(hFig)
     sMri = bst_memory('LoadMri', MriFile);
     % If fiducials not defined: force MRI edition
     if isempty(sMri.SCS) || ~isfield(sMri.SCS, 'NAS') || ~isfield(sMri.SCS, 'LPA') || ~isfield(sMri.SCS, 'RPA') || ...
-           isempty(sMri.NCS) || ~isfield(sMri.NCS, 'AC')  || ~isfield(sMri.NCS, 'PC')  || ~isfield(sMri.NCS, 'IH') || ...
-           isempty(sMri.SCS.NAS) || isempty(sMri.SCS.LPA) || isempty(sMri.SCS.RPA) || ...
-           isempty(sMri.NCS.AC)  || isempty(sMri.NCS.PC)  || isempty(sMri.NCS.IH)
+           isempty(sMri.SCS.NAS) || isempty(sMri.SCS.LPA) || isempty(sMri.SCS.RPA)
         isEditFiducials = 1;
     end
 end
@@ -203,7 +237,7 @@ end
 if ~isOverlay || isempty(TessInfo.OverlayLabels)
     figure_mri('SetVolumeAtlas', hFig);
 % If the overlay is an atlas: simply set the atlas name in the figure
-elseif isOverlay && ~isempty(TessInfo.OverlayLabels)
+elseif isOverlay && ~isempty(TessInfo.OverlayLabels) && strcmpi(file_gettype(OverlayFile), 'subjectimage') && ~isempty(strfind(OverlayFile, '_volatlas'))
     [sSubject, iSubject, iAnatomy] = bst_get('MriFile', OverlayFile);
     setappdata(hFig, 'AnatAtlas', sSubject.Anatomy(iAnatomy).Comment);
 end

@@ -17,7 +17,7 @@ function [mneObj, DataMat, ChannelMat, iChannels] = out_mne_data(DataFiles, ObjT
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -31,7 +31,7 @@ function [mneObj, DataMat, ChannelMat, iChannels] = out_mne_data(DataFiles, ObjT
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2019-2020
+% Authors: Francois Tadel, 2019-2022
 
 
 %% ===== PARSE INPUTS =====
@@ -57,19 +57,21 @@ elseif isstruct(DataFiles)
     DataFiles = [];
 end
 % Only 'Epoched' objects can have multiple data files in input
-if (length(DataFiles) > 1) && ~strcmpi(ObjType, 'Epoched')
+if ~ismember(ObjType, {'Raw', 'Epoched', 'Evoked'})
+    error('ObjType must be one of the following types of data: ''Raw'', ''Epoched'', ''Evoked''');
+elseif (length(DataFiles) > 1) && ~strcmpi(ObjType, 'Epoched')
     error('Only "Epoched" objects accept multiple input files.');
 end
 % Check that data files are available in the database
-if ~isempty(DataFiles)
+MeasDate = [];
+if ~isempty(DataFiles) && isappdata(0, 'BrainstormRunning')
     sStudy = bst_get('DataFile', DataFiles{1});
-    if isempty(sStudy)
-        error(['File not found: ' DataFiles{1}]);
-    end
     % Get study date
-    MeasDate = sStudy.DateOfStudy;
-else
-    MeasDate = [];
+    if isempty(sStudy)
+        warning(['File not found in database: ' DataFiles{1}]);
+    else
+        MeasDate = sStudy.DateOfStudy;
+    end
 end
 
 
@@ -163,6 +165,9 @@ end
 %% ===== CREATE INFO OBJECT =====
 % Create info object
 mneInfo = out_mne_channel(ChannelFile, iChannels);
+% Unlocking Info object
+mneSetStatus = py.getattr(mneInfo, '__setstate__');
+mneSetStatus(py.dict(pyargs('_unlocked', true)));
 % Sampling frequency
 mneInfo{'sfreq'} = 1 ./ (DataMat.Time(2) - DataMat.Time(1));
 % Description
@@ -170,7 +175,7 @@ mneInfo{'description'} = DataMat.Comment;
 % Bad channels
 iBad = find(DataMat.ChannelFlag == -1);
 if ~isempty(iBad)
-    mneInfo{'bads'} = {ChannelMat.Channel(iBad).Name};
+    mneInfo{'bads'} = py.list({ChannelMat.Channel(iBad).Name});
 end
 % Mark projectors as applied (data loaded with UseSSP=1)
 for iProj = 1:length(mneInfo{'projs'})
@@ -189,6 +194,8 @@ if ~isempty(MeasDate)
     catch
     end
 end
+% Locking Info object again
+mneSetStatus(py.dict(pyargs('_unlocked', false)));
 
 % Object: Raw
 switch ObjType
@@ -196,7 +203,10 @@ switch ObjType
     case 'Raw'
         % Create Raw object
         first_samp = round(DataMat.Time(1) .* mneInfo{'sfreq'});
-        mneObj = py.mne.io.RawArray(bst_mat2py(DataMat.F), mneInfo, first_samp);
+        mneObj = py.mne.io.RawArray(pyargs(...
+            'data',       bst_mat2py(DataMat.F), ...
+            'info',       mneInfo, ...
+            'first_samp', first_samp));
         
         % Add events
         for iEvt = 1:length(DataMat.Events)
@@ -218,23 +228,31 @@ switch ObjType
         
     case 'Epoched'
         % Sort trials by type, based on the comment of the files
-        events = uint32([(1:size(DataMat.F, 1))', repmat([0, 1], size(DataMat.F, 1), 1)]);
+        evts = uint32([(1:size(DataMat.F, 1))', repmat([0, 1], size(DataMat.F, 1), 1)]);
         event_id = py.dict();
         if ~isempty(epochsComment)
             uniqueTypes = unique(epochsComment);
             for iType = 1:length(uniqueTypes)
-                events(strcmpi(epochsComment, uniqueTypes{iType}), 3) = iType;
+                evts(strcmpi(epochsComment, uniqueTypes{iType}), 3) = iType;
                 event_id{uniqueTypes{iType}} = uint32(iType);
             end
         end
         % Create Epoched object from concatenated trials
-%         mneObj = py.mne.EpochsArray(bst_mat2py(DataMat.F), mneInfo, bst_mat2py(events), DataMat.Time(1), event_id);
-        mneObj = py.mne.EpochsArray(DataMat.F, mneInfo, bst_mat2py(events), DataMat.Time(1), event_id);
+        mneObj = py.mne.EpochsArray(pyargs(...
+            'data',     DataMat.F, ...
+            'info',     mneInfo, ...
+            'events',   bst_mat2py(evts, 1), ...
+            'tmin',     DataMat.Time(1), ...
+            'event_id', event_id));
         
     case 'Evoked'
         % Create Evoked object
-%         mneObj = py.mne.EvokedArray(bst_mat2py(DataMat.F), mneInfo, DataMat.Time(1), DataMat.Comment, uint32(DataMat.nAvg));
-        mneObj = py.mne.EvokedArray(DataMat.F, mneInfo, DataMat.Time(1), DataMat.Comment, uint32(DataMat.nAvg));
+        mneObj = py.mne.EvokedArray(pyargs(...
+            'data',    DataMat.F, ...
+            'info',    mneInfo, ...
+            'tmin',    DataMat.Time(1), ...
+            'comment', DataMat.Comment, ...
+            'nave',    uint32(DataMat.nAvg)));
 end
 
 

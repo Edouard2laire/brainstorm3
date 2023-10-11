@@ -8,7 +8,7 @@ function varargout = panel_timefreq_options(varargin)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -22,7 +22,8 @@ function varargout = panel_timefreq_options(varargin)
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2010-2020; Hossein Shahabi, 2020
+% Authors: Francois Tadel, 2010-2021
+%          Hossein Shahabi, 2020-2021
 
 eval(macro_method);
 end
@@ -75,10 +76,12 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)  %#ok<DEFNU>
     end
     
     % Determine which function is calling this pannel
-    isProcHenv = ismember(func2str(sProcess.Function), {'process_henv1', 'process_henv1n', 'process_henv2'});
-    if isProcHenv
+    % Used by process_: hilbert, psd, timefreq,  and connectivity: henv(1,1n,2), plv(1,1n,2)
+    % Connectivity processes have options.tfmeasure with value 'hilbert' or 'morlet' ('fourier' doesn't use this panel).
+    isProcConnect = isfield(sProcess.options, 'tfmeasure'); % used multiple times
+    if isProcConnect
         Method = sProcess.options.tfmeasure.Value;
-    else
+    else % hilbert, psd, timefreq
         Method = strrep(strrep(func2str(sProcess.Function), 'process_', ''), 'timefreq', 'morlet');
     end
     
@@ -157,7 +160,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)  %#ok<DEFNU>
         % Button: Generate
         jButtonTimeBands = gui_component('button', jPanelTime, 'br', 'Generate', [], [], @CreateTimeBands);
         jButtonTimeBands.setMargin(Insets(0,3,0,3));
-    if ~ismember(Method, {'fft', 'psd'}) && ~isProcHenv
+    if ~ismember(Method, {'fft', 'psd'}) && ~isProcConnect
         jPanelNew.add('br', jPanelTime);
     else
         gui_component('label', jPanelNew, 'br', '');
@@ -181,7 +184,14 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)  %#ok<DEFNU>
             jRadioFreqLog    = [];
             jTextFreqLog     = [];
             jRadioFreqBands  = gui_component('radio', jPanelFreq, 'br', 'Group in frequency bands (Hz)', jButtonGroup, [], @UpdatePanel);
+        elseif strcmpi(Method, 'stft')
+            jRadioFreqLinear = gui_component('radio', jPanelFreq, [],   'Matlab''s FFT defaults',        jButtonGroup, [], @UpdatePanel);
+            jTextFreqLinear  = [];
+            jRadioFreqLog    = [];
+            jTextFreqLog     = [];
+            jRadioFreqBands  = gui_component('radio', jPanelFreq, 'br', 'Group in frequency bands (Hz)', jButtonGroup, [], @UpdatePanel);
         end
+
         % Text: freq bands
         strFreqBands = process_tf_bands('FormatBands', TimefreqOptions.FreqBands);
         jTextFreqBands = gui_component('textfreq', jPanelFreq, 'br hfill', strFreqBands, [], [], @UpdatePanel);
@@ -212,6 +222,27 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)  %#ok<DEFNU>
         jTextTr = [];
     end
     
+    % ===== STFT OPTIONS =====
+    if strcmpi(Method, 'stft')
+        jPanelStft= gui_river([2,2], [0,10,15,10], 'Short-time Fourier options');
+
+        % Windowing parameters
+                      gui_component('label',    jPanelStft, 'br', 'Fourier transform window length:  ');
+        jTextWinLen = gui_component('texttime', jPanelStft, 'tab', num2str(TimefreqOptions.StftWinLen));
+                      gui_component('label',    jPanelStft, '', 's   (default=All window)');
+                      gui_component('label',    jPanelStft, 'br', 'Fourier transform window overlap:  ');
+        jTextWinOvr = gui_component('texttime', jPanelStft, 'tab', num2str(TimefreqOptions.StftWinOvr));
+                      gui_component('label',    jPanelStft, '', '%   (default=0%)');
+                      gui_component('label',    jPanelStft, 'br', 'Highest frequency of interest::  ');
+        jTextFrqMax = gui_component('texttime', jPanelStft, 'tab', num2str(TimefreqOptions.StftFrqMax));
+                      gui_component('label',    jPanelStft, '', 'Hz   (default=90Hz)');
+        jPanelNew.add('br hfill', jPanelStft);
+    else
+        jTextWinLen  = [];
+        jTextWinOvr  = [];
+        jTextFrqMax = [];
+    end
+
     % ===== PROCESSING OPTIONS =====
     jPanelProc = gui_river([2,2], [0,10,15,10], 'Processing options');       
         % === KERNEL SOURCE ===
@@ -234,7 +265,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)  %#ok<DEFNU>
             case 'data',     ClusterName = 'Cluster';
             case 'results',  ClusterName = 'Scout'; 
             case 'timefreq', ClusterName = 'Scout';
-            otherwise,      ClusterName = '';
+            otherwise,       ClusterName = '';
         end
         % Scout/cluster function
         if isCluster && ~isClusterAll
@@ -280,6 +311,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)  %#ok<DEFNU>
             case 'hilbert',  strMap = 'Hilbert maps';
             case 'fft',      strMap = 'FFT values';
             case 'psd',      strMap = 'PSD values';
+            otherwise,       strMap = '';
         end
         % Compute average
         if ~isOneFile
@@ -303,7 +335,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)  %#ok<DEFNU>
         
         % === FILE SIZE ===
         jTextOutputSize = gui_component('label', jPanelProc, 'br', '');
-    if ~isProcHenv
+    if ~isProcConnect
         jPanelNew.add('br hfill', jPanelProc);
     end
     
@@ -317,6 +349,9 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)  %#ok<DEFNU>
     if strcmpi(Method, 'hilbert')
         jRadioFreqLinear.setEnabled(0);
         jRadioFreqBands.setSelected(1);
+    % PSD with normalized units: frequency bands not available
+    elseif strcmpi(Method, 'psd') && isfield(sProcess.options, 'units') && isfield(sProcess.options.units, 'Value') && isequal(sProcess.options.units.Value, 'normalized')
+        jRadioFreqLinear.setSelected(1);
     elseif TimefreqOptions.isFreqBands
         jRadioFreqBands.setSelected(1);
     elseif TimefreqOptions.isFreqLog
@@ -377,6 +412,9 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)  %#ok<DEFNU>
                   'jButtonFreqBands',jButtonFreqBands, ...
                   'jTextFc',         jTextFc, ...
                   'jTextTr',         jTextTr, ...
+                  'jTextWinLen',     jTextWinLen, ...
+                  'jTextWinOvr',     jTextWinOvr, ...
+                  'jTextFrqMax',     jTextFrqMax, ...
                   'jRadioKernelYes', jRadioKernelYes, ...
                   'jRadioKernelNo',  jRadioKernelNo, ...
                   'jRadioClustBefore', jRadioClustBefore, ...
@@ -444,7 +482,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)  %#ok<DEFNU>
             end
         else
             jRadioFreqLinear.setEnabled(1);
-            if isProcHenv
+            if isProcConnect || (strcmpi(Method, 'psd') && isfield(sProcess.options, 'units') && isfield(sProcess.options.units, 'Value') && isequal(sProcess.options.units.Value, 'normalized'))
                 jRadioFreqBands.setEnabled(0);
             else
                 jRadioFreqBands.setEnabled(1);
@@ -483,8 +521,8 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)  %#ok<DEFNU>
                 end                
             end
         end
-        % Disable some options when called through process_henv*
-        if isProcHenv
+        % Disable some options when called through connectivity process (henv*, plv*)
+        if isProcConnect
             jRadioMeasNon.setSelected(1);
             jRadioMeasPow.setEnabled(0);
             jRadioMeasMag.setEnabled(0);
@@ -821,6 +859,12 @@ function s = GetPanelContents(ctrl)
         s.MorletFc     = str2num(char(ctrl.jTextFc.getText()));
         s.MorletFwhmTc = str2num(char(ctrl.jTextTr.getText()));
     end
+    % Get stft options
+    if ~isempty(ctrl.jTextWinLen)
+        s.StftWinLen = str2num(char(ctrl.jTextWinLen.getText()));
+        s.StftWinOvr = str2num(char(ctrl.jTextWinOvr.getText()));
+        s.StftFrqMax = str2num(char(ctrl.jTextFrqMax.getText()));
+    end
     % Get time to apply cluster function
     if ~isempty(ctrl.jRadioClustBefore)
         if ctrl.jRadioClustBefore.isSelected()
@@ -898,6 +942,12 @@ function s = GetPanelContents(ctrl)
     if ~isempty(ctrl.jTextFc)
         TimefreqOptions.MorletFc     = s.MorletFc;
         TimefreqOptions.MorletFwhmTc = s.MorletFwhmTc;
+    end
+    % STFT options
+    if ~isempty(ctrl.jTextWinLen)
+        TimefreqOptions.StftWinLen = s.StftWinLen;
+        TimefreqOptions.StftWinOvr = s.StftWinOvr;
+        TimefreqOptions.StftFrqMax = s.StftFrqMax;
     end
     % Other options
     bst_set(['TimefreqOptions_', ctrl.Method], TimefreqOptions);

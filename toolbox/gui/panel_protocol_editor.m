@@ -9,7 +9,7 @@ function varargout = panel_protocol_editor(varargin)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -295,7 +295,7 @@ function [subjectDir, studyDir, protocolName] = SelectProtocolDir(protocolDir)
     studyDir   = [];
     protocolName = [];
     % Select folder
-    protocolDir = java_getfile('open', 'Load protocol...', bst_fileparts(protocolDir, 1), 'single', 'dirs', ...
+    protocolDir = java_getfile('open', 'Load protocol...', protocolDir, 'single', 'dirs', ...
                                {{'*'}, 'Brainstorm protocol (folder)', 'protocol'}, 1);
     % Show again main frame
     jBstFrame = bst_get('BstFrame');

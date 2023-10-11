@@ -9,7 +9,7 @@ function varargout = process_timefreq( varargin )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -93,6 +93,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         case 'process_hilbert',       strProcess = 'hilbert';
         case 'process_fft',           strProcess = 'fft';
         case 'process_psd',           strProcess = 'psd';
+        case 'process_sprint',        strProcess = 'sprint';
         case 'process_ft_mtmconvol',  strProcess = 'mtmconvol';
         otherwise,                    error('Unsupported process.');
     end
@@ -114,6 +115,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         switch tfOPTIONS.Method
             case 'fft',       tfOPTIONS.Comment = 'FFT';
             case 'psd',       tfOPTIONS.Comment = 'PSD';
+            case 'sprint',    tfOPTIONS.Comment = 'SPRiNT';
             case 'morlet',    tfOPTIONS.Comment = 'Wavelet';
             case 'hilbert',   tfOPTIONS.Comment = 'Hilbert';
             case 'mtmconvol', tfOPTIONS.Comment = 'Multitaper';
@@ -203,7 +205,10 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         end
         tfOPTIONS.Comment = [tfOPTIONS.Comment, ' ', strMeasure];
     end
-    
+    % if process is SPRiNT
+    if isfield(sProcess.options, 'fooof')
+       tfOPTIONS.SPRiNTopts = sProcess.options;
+    end
     % Output
     if isfield(sProcess.options, 'avgoutput') && ~isempty(sProcess.options.avgoutput) && ~isempty(sProcess.options.avgoutput.Value)
         if sProcess.options.avgoutput.Value

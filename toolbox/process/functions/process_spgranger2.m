@@ -7,7 +7,7 @@ function varargout = process_spgranger2( varargin )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -49,12 +49,6 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.removeevoked.Type    = 'checkbox';
     sProcess.options.removeevoked.Value   = 0;
     sProcess.options.removeevoked.Group   = 'input';
-    % === DIRECTION
-    sProcess.options.dirlabel.Comment  = 'Direction of the causality:';
-    sProcess.options.dirlabel.Type     = 'label';
-    sProcess.options.direction.Comment = {'From the selected node (out)', 'To the selected node (in)', 'Both (generates two files)'};
-    sProcess.options.direction.Type    = 'radio';
-    sProcess.options.direction.Value   = 3;
     % === GRANGER ORDER
     sProcess.options.grangerorder.Comment = 'Maximum Granger model order (default=10):';
     sProcess.options.grangerorder.Type    = 'value';
@@ -96,18 +90,9 @@ function OutputFiles = Run(sProcess, sInputA, sInputB) %#ok<DEFNU>
     OPTIONS.GrangerOrder = sProcess.options.grangerorder.Value{1};
     OPTIONS.MaxFreqRes   = sProcess.options.maxfreqres.Value{1};
     OPTIONS.MaxFreq      = sProcess.options.maxfreq.Value{1};
-%     OPTIONS.pThresh      = sProcess.options.pthresh.Value{1};
 
-    % Computation depends on the direction
-    OutputFiles = {};
-    if ismember(sProcess.options.direction.Value, [1 3])
-        OPTIONS.GrangerDir = 'out';
-        OutputFiles = cat(2, OutputFiles, bst_connectivity({sInputA.FileName}, {sInputB.FileName}, OPTIONS));
-    end
-    if ismember(sProcess.options.direction.Value, [2 3])
-        OPTIONS.GrangerDir = 'in';
-        OutputFiles = cat(2, OutputFiles, bst_connectivity({sInputA.FileName}, {sInputB.FileName}, OPTIONS));
-    end
+    % Compute metric
+    OutputFiles = bst_connectivity(sInputA, sInputB, OPTIONS);
 end
 
 

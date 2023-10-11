@@ -5,7 +5,7 @@ function [sFile, ChannelMat] = in_fopen_neuroscope(DataFile)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -161,8 +161,8 @@ for iFile = 1:length(dirres)
             events(iClu).select     = 1;
             events(iClu).times      = spikeSmp(iTime) ./ sFile.prop.sfreq;
             events(iClu).epochs     = ones(1, length(iTime));
-            events(iClu).channels   = cell(1, size(events(iClu).times, 2));
-            events(iClu).notes      = cell(1, size(events(iClu).times, 2));
+            events(iClu).channels   = [];
+            events(iClu).notes      = [];
         end
     % No clusters: one event per file
     else
@@ -173,8 +173,8 @@ for iFile = 1:length(dirres)
         events.select     = 1;
         events.times      = spikeSmp ./ sFile.prop.sfreq;
         events.epochs     = ones(1, length(spikeSmp));
-        events.channels   = cell(1, size(events.times, 2));
-        events.notes      = cell(1, size(events.times, 2));
+        events.channels   = [];
+        events.notes      = [];
     end
     % Import this list
     sFile = import_events(sFile, [], events);

@@ -19,7 +19,7 @@ function [fid, nifti] = out_mri_nii( sMri, OutputFile, typeMatlab, Nt )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -109,13 +109,14 @@ hdr.glmax  = MaxVal;
 
 % ===== TRANSORMATION MATRICES ======
 % Use existing matrices (from the header)
-if isfield(sMri, 'Header') && isfield(sMri.Header, 'nifti') && all(isfield(sMri.Header.nifti, {'qform_code', 'sform_code', 'quatern_b', 'quatern_c', 'quatern_d', 'qoffset_x', 'qoffset_y', 'qoffset_z', 'srow_x', 'srow_y', 'srow_z'}))
+if isfield(sMri, 'Header') && isfield(sMri.Header, 'nifti') && all(isfield(sMri.Header.nifti, {'qform_code', 'sform_code', 'quatern_b', 'quatern_c', 'quatern_d', 'qoffset_x', 'qoffset_y', 'qoffset_z', 'srow_x', 'srow_y', 'srow_z'})) && isfield(sMri.Header, 'dim') && isfield(sMri.Header.dim, 'pixdim')
     nifti = sMri.Header.nifti;
+    hdr.pixdim = sMri.Header.dim.pixdim;
 % Use transformation matrices from other formats than .nii
 else
     % === QFORM ===
     % XFORM_SCANNER: Scanner-based referential: from the vox2ras matrix
-    if isfield(sMri, 'InitTransf') && ~isempty(sMri.InitTransf) && any(ismember(sMri.InitTransf(:,1), 'vox2ras'))
+    if isfield(sMri, 'InitTransf') && ~isempty(sMri.InitTransf) && ismember('vox2ras', sMri.InitTransf(:,1))
         nifti.qform_code = 1;  % NIFTI_XFORM_SCANNER_ANAT
         % Use directly the unmodified vox2ras from the original file
         iTransf = find(strcmpi(sMri.InitTransf(:,1), 'vox2ras'));
@@ -141,12 +142,18 @@ else
     end
 
     % === SFORM ===
+    % If there is a QFORM, do not define SFORM to avoid ambiguities
+    if (nifti.qform_code ~= 0)
+        nifti.sform_code = 0;
+        nifti.srow_x = [0 0 0 0];
+        nifti.srow_y = [0 0 0 0];
+        nifti.srow_z = [0 0 0 0];
     % XFORM_MNI_152: Normalized coordinates (NCS field)
-    if isfield(sMri, 'NCS') && isfield(sMri.NCS, 'R') && ~isempty(sMri.NCS.R) && isfield(sMri.NCS, 'T') && ~isempty(sMri.NCS.T)
+    elseif isfield(sMri, 'NCS') && isfield(sMri.NCS, 'R') && ~isempty(sMri.NCS.R) && isfield(sMri.NCS, 'T') && ~isempty(sMri.NCS.T)
         nifti.sform_code = 4;   % NIFTI_XFORM_MNI_152
         mri2world = cs_convert(sMri, 'mri', 'mni');
     % XFORM_ALIGNED: If no scanner coordinates (qform) or MNI normalization (sform): Just center the image on AC or the middle of the volume
-    elseif (nifti.qform_code == 0)
+    else
         nifti.sform_code = 2;   % NIFTI_XFORM_ALIGNED_ANAT
         if isfield(sMri, 'NCS') && isfield(sMri.NCS, 'AC') && ~isempty(sMri.NCS.AC) 
             Origin = sMri.NCS.AC;
@@ -160,12 +167,6 @@ else
             0, 1, 0, -Origin(2) ./ 1000; ...
             0, 0, 1, -Origin(3) ./ 1000; 
             0, 0, 0, 1];
-    % No sform
-    else
-        nifti.sform_code = 0;
-        nifti.srow_x = [0 0 0 0];
-        nifti.srow_y = [0 0 0 0];
-        nifti.srow_z = [0 0 0 0];
     end
     % Convert Brainstorm transformation to nifti vox2ras
     if (nifti.sform_code ~= 0)

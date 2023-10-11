@@ -22,7 +22,7 @@ function [hFig, iDS, iFig] = view_mri_3d(MriFile, OverlayFile, SurfAlpha, hFig)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -148,13 +148,22 @@ end
 if ~isempty(SurfAlpha)
     panel_surface('SetSurfaceTransparency', hFig, iSurf, SurfAlpha);
 end
-% Add data on the MRI slices 
-if ~isempty(OverlayFile)
+% Add data on the MRI slices
+isOverlay = ~isempty(OverlayFile);
+if isOverlay
     isOk = panel_surface('SetSurfaceData', hFig, iSurf, OverlayType, OverlayFile, isStat);
     if ~isOk
         close(hFig);
         return;
     end
+end
+% Try to load an anatomical atlas
+if ~isOverlay
+    figure_3d('SetVolumeAtlas', hFig);
+% If the overlay is an atlas: simply set the atlas name in the figure
+elseif isOverlay && strcmpi(file_gettype(OverlayFile), 'subjectimage') && ~isempty(strfind(OverlayFile, '_volatlas'))
+    [sSubject, iSubject, iAnatomy] = bst_get('MriFile', OverlayFile);
+    setappdata(hFig, 'AnatAtlas', sSubject.Anatomy(iAnatomy).Comment);
 end
 % Update figure selection
 bst_figures('SetCurrentFigure', hFig, '3D');

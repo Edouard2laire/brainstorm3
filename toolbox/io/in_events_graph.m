@@ -27,7 +27,7 @@ function events = in_events_graph(sFile, EventFile)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -60,7 +60,7 @@ for i = 1:length(listOfReaders)
         frewind(fid);
         events = listOfReaders{i}(fid);
     catch
-        errorMsg = [errorMsg newline lasterr];
+        errorMsg = [errorMsg, char(10), lasterr];
         if (i < length(listOfReaders))
           continue;
         else
@@ -120,8 +120,8 @@ for iEvt = 1:length(uniqueLabel)
     events(iEvt).times       = round(([evtMat(1,iOcc); evtMat(1,iOcc) + evtMat(2,iOcc)]) .* sFile.prop.sfreq) ./ sFile.prop.sfreq;
     events(iEvt).reactTimes  = [];
     events(iEvt).select      = 1;
-    events(iEvt).channels   = cell(1, size(events(iEvt).times, 2));
-    events(iEvt).notes      = cell(1, size(events(iEvt).times, 2));
+    events(iEvt).channels   = [];
+    events(iEvt).notes      = [];
 end
 
 end
@@ -180,8 +180,8 @@ for iEvt = 1:length(uniqueLabel)
     events(iEvt).times       = round(evtMat(1,iOcc)* sFile.prop.sfreq) ./ sFile.prop.sfreq;
     events(iEvt).reactTimes  = [];
     events(iEvt).select      = 1;
-    events(iEvt).channels   = cell(1, size(events(iEvt).times, 2));
-    events(iEvt).notes      = cell(1, size(events(iEvt).times, 2));
+    events(iEvt).channels   = [];
+    events(iEvt).notes      = [];
 end
 
 end

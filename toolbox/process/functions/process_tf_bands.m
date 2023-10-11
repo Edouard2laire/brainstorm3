@@ -11,7 +11,7 @@ function varargout = process_tf_bands( varargin )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -25,7 +25,7 @@ function varargout = process_tf_bands( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2012-2014
+% Authors: Francois Tadel, 2012-2021
 
 eval(macro_method);
 end
@@ -153,6 +153,12 @@ function [TimefreqMat, Messages] = Compute(TimefreqMat, FreqBands, TimeBands)
     
     % ===== FREQUENCY BANDS =====
     if ~isempty(FreqBands)
+        % Check format
+        if (size(FreqBands,2) ~= 3) || ~all(cellfun(@ischar, FreqBands(:))) || any(cellfun(@(c)isempty(strtrim(c)), FreqBands(:)))
+            Messages = 'Invalid frequency band format.';
+            TimefreqMat = [];
+            return;
+        end
         % Frequency bounds
         BandBounds = GetBounds(FreqBands);
         % Number of bands
@@ -247,8 +253,9 @@ function strBands = FormatBands(Bands) %#ok<DEFNU>
 end
 
 %% ===== STRING => BANDS =====
-function Bands = ParseBands(strBands) %#ok<DEFNU>
+function [Bands, errMsg] = ParseBands(strBands) %#ok<DEFNU>
     Bands = {};
+    errMsg = '';
     if isempty(strtrim(strBands))
         return
     end
@@ -258,6 +265,12 @@ function Bands = ParseBands(strBands) %#ok<DEFNU>
     for iBand = 1:length(lineBand)
         % Split line 
         valBand = str_split(lineBand{iBand}, '/\|');
+        if (length(valBand) ~= 3) || any(cellfun(@(c)isempty(strtrim(c)), valBand))
+            errMsg = ['Invalid time or frequency band "' lineBand{iBand} '".'];
+            disp(['BST> Error: ' errMsg]);
+            Bands = {};
+            return;
+        end
         for i = 1:length(valBand)
             Bands{iBand,i} = strtrim(valBand{i});
         end

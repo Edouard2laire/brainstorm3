@@ -13,7 +13,7 @@ function [MriFileMni, sMriMni] = import_mniatlas(iSubject, sTemplate, isInteract
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -79,7 +79,7 @@ else
     if ~isempty(strfind(sTemplate.FilePath, 'http://')) || ~isempty(strfind(sTemplate.FilePath, 'https://')) || ~isempty(strfind(sTemplate.FilePath, 'ftp://'))
         tmpDir = bst_get('BrainstormTmpDir');
         % Output file
-        ZipFile = bst_fullfile(tmpDir, [lower(sTemplate.Name) '.zip']);
+        ZipFile = bst_fullfile(tmpDir, [sTemplate.Name '.zip']);
         % Download file
         errMsg = gui_brainstorm('DownloadFile', sTemplate.FilePath, ZipFile, 'Download MNI parcellation');
         if ~isempty(errMsg)
@@ -97,7 +97,7 @@ else
             error('Multiple parcellations were downloaded, please select one of them.');
         end
         % Look for parcellation volume
-        sTemplate.FilePath = bst_fullfile(atlasDir, [lower(sTemplate.Name) '.nii.gz']);
+        sTemplate.FilePath = bst_fullfile(atlasDir, [sTemplate.Name '.nii.gz']);
     end
     % Check the existence of MNI volume
     if ~file_exist(sTemplate.FilePath)

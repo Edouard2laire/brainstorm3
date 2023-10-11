@@ -7,7 +7,7 @@ function varargout = process_simulate_sources( varargin )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -22,7 +22,7 @@ function varargout = process_simulate_sources( varargin )
 % =============================================================================@
 %
 % Authors: Guiomar Niso, 2013-2016
-%          Francois Tadel, 2013-2020
+%          Francois Tadel, 2013-2022
 
 eval(macro_method);
 end
@@ -51,20 +51,26 @@ function sProcess = GetDescription() %#ok<DEFNU>
                                        '&nbsp;- Create an empty source file with zeros at every vertex<BR>' ...
                                        '&nbsp;- Assign each signal #i to all the vertices within scout #i<BR>' ... 
                                        '&nbsp;- Add random noise to the source maps (optional):<BR>' ...
-                                       '&nbsp;&nbsp;&nbsp;<I>Src = Src + SNR1 .* (rand(size(Src))-0.5) .* max(abs(Src(:)));</I><BR><BR></FONT>'];
+                                       '&nbsp;&nbsp;&nbsp;<I>Src = Src + NSR1 .* (rand(size(Src))-0.5) .* max(abs(Src(:)));</I><BR><BR></FONT>'];
     sProcess.options.label2.Type    = 'label';
     % === SCOUTS
     sProcess.options.scouts.Comment = '';
     sProcess.options.scouts.Type    = 'scout';
     sProcess.options.scouts.Value   = {};
     sProcess.options.scouts.Group   = 'input';
+    % === UNITS
+    sProcess.options.units.Comment = {'pAm <FONT COLOR="#777777">(*10<UP>-9</UP>)</FONT>', 'Am', 'Other', 'Input signal units:'; ...
+                                      'pam', 'am', 'other', ''};
+    sProcess.options.units.Type    = 'radio_linelabel';
+    sProcess.options.units.Value   = 'pam';
+    sProcess.options.units.Group   = 'input';
     % === ADD NOISE
     sProcess.options.isnoise.Comment    = 'Add noise';
     sProcess.options.isnoise.Type       = 'checkbox';
     sProcess.options.isnoise.Value      = 0;
     sProcess.options.isnoise.Controller = 'Noise';
-    % === LEVEL OF NOISE (SNR1)
-    sProcess.options.noise1.Comment = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Level of source noise (SNR1):';
+    % === LEVEL OF NOISE (NSR1)
+    sProcess.options.noise1.Comment = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Level of source noise (NSR1):';
     sProcess.options.noise1.Type    = 'value';
     sProcess.options.noise1.Value   = {0, '', 2};
     sProcess.options.noise1.Class   = 'Noise';

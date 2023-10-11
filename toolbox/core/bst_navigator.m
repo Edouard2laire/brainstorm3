@@ -12,7 +12,7 @@ function varargout = bst_navigator( varargin )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -34,16 +34,20 @@ end
 
 %% ===== NAVIGATION =====
 function DbNavigation( action, iDataSets )
-    global GlobalData mutexNavigator;
+    global GlobalData mutexNavigator timerNavigator;
     % ===== MUTEX =====
     % Use a mutex to prevent the function from being executed more than once at the same time
     if isempty(mutexNavigator) || (mutexNavigator > 1)
         % Entrance accepted
-        tic
+        timerNavigator = tic;
         mutexNavigator = 0;
     else
         % Entrance rejected (another call is not finished,and was call less than 1 seconds ago)
-        mutexNavigator = toc;
+        if ~isempty(timerNavigator)
+            mutexNavigator = toc(timerNavigator);
+        else
+            mutexNavigator = toc;
+        end
         disp('Call to bst_navigator() ignored...');
         return
     end
@@ -391,8 +395,9 @@ function DbNavigation( action, iDataSets )
                 % Load new channel file
                 ChannelMat = in_bst_channel(newChannelFile);
                 GlobalData.DataSet(iDS).Channel         = ChannelMat.Channel;
-                GlobalData.DataSet(iDS).MegRefCoef      = ChannelMat.MegRefCoef; 
+                GlobalData.DataSet(iDS).MegRefCoef      = ChannelMat.MegRefCoef;
                 GlobalData.DataSet(iDS).Projector       = ChannelMat.Projector;
+                GlobalData.DataSet(iDS).Clusters        = ChannelMat.Clusters;
                 GlobalData.DataSet(iDS).IntraElectrodes = ChannelMat.IntraElectrodes;
             end
         end
@@ -457,7 +462,7 @@ function DbNavigation( action, iDataSets )
         % Process each figure : update or close it
         iFig = 1;
         isDSUnloaded = 0;
-        while ~isDSUnloaded && (iFig <= length(GlobalData.DataSet(iDS).Figure))
+        while ~isDSUnloaded && (iDS <= length(GlobalData.DataSet)) && (iFig <= length(GlobalData.DataSet(iDS).Figure))
             Figure = GlobalData.DataSet(iDS).Figure(iFig);
             isFigureRemoved = 0;
             % Update figure appdata

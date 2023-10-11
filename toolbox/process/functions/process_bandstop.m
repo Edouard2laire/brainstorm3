@@ -9,7 +9,7 @@ function varargout = process_bandstop( varargin )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -64,7 +64,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.freqwidth.Type    = 'value';
     sProcess.options.freqwidth.Value   = {1.5, 'Hz', 2};
     % === Display properties
-    sProcess.options.display.Comment = {'process_bandstop(''DisplaySpec'',iProcess,sfreq);', '<BR>', 'View filter response'};
+    sProcess.options.display.Comment = {'process_bandstop(''DisplaySpec'',sfreq);', '<BR>', 'View filter response'};
     sProcess.options.display.Type    = 'button';
     sProcess.options.display.Value   = [];
 end
@@ -122,8 +122,8 @@ function sInput = Run(sProcess, sInput) %#ok<DEFNU>
         sInput.Events.color    = [.8 0 0];
         sInput.Events.epochs   = [1 1];
         sInput.Events.times    = round(trans .* sfreq) ./ sfreq;
-        sInput.Events.channels = cell(1, size(sInput.Events.times, 2));
-        sInput.Events.notes    = cell(1, size(sInput.Events.times, 2));
+        sInput.Events.channels = [];
+        sInput.Events.notes    = [];
     end
     
     % Comment
@@ -143,6 +143,14 @@ function [x, FiltSpec, Messages] = Compute(x, sfreq, FreqList, FreqWidth, method
     if (nargin < 4) || isempty(FreqWidth) || isempty(method)
         method = 'fieldtrip_butter';
         FreqWidth = 1.5;
+    end
+    % Use the signal processing toolbox?
+    if bst_get('UseSigProcToolbox')
+        filtfilt_fcn = @filtfilt;
+        butter_fcn = @butter;
+    else
+        filtfilt_fcn = @oc_filtfilt;
+        butter_fcn = @oc_butter;
     end
     % Check list of freq to remove
     if isempty(FreqList) || isequal(FreqList, 0)
@@ -168,16 +176,12 @@ function [x, FiltSpec, Messages] = Compute(x, sfreq, FreqList, FreqWidth, method
                 % Filter order
                 N = 4;
                 % Butterworth filter
-                if bst_get('UseSigProcToolbox')
-                    [B,A] = butter(N, FreqBand ./ Fnyq, 'stop');
-                else
-                    [B,A] = oc_butter(N, FreqBand ./ Fnyq, 'stop');
-                end
+                [B,A] = butter_fcn(N, FreqBand ./ Fnyq, 'stop');
                 FiltSpec.b(ifreq,:) = B;
                 FiltSpec.a(ifreq,:) = A;
                 % Filter signal
                 if ~isempty(x)
-                    x = filtfilt(B, A, x')';
+                    x = filtfilt_fcn(B, A, x')';
                 end
 
             % Source: FieldTrip toolbox
@@ -225,7 +229,11 @@ function [x, FiltSpec, Messages] = Compute(x, sfreq, FreqList, FreqWidth, method
             FiltSpec.DenT = FiltSpec.a(1,:) ; 
             FiltSpec.order = length(FiltSpec.DenT)-1 ;
             % Compute the cumulative energy of the impulse response
-            [h,t] = impz(FiltSpec.NumT,FiltSpec.DenT,[],sfreq);
+            if bst_get('UseSigProcToolbox')
+                [h,t] = impz(FiltSpec.NumT,FiltSpec.DenT,[],sfreq);
+            else
+                [h,t] = oc_impz(FiltSpec.NumT,FiltSpec.DenT,[],sfreq);
+            end
             E = h(1:end) .^ 2 ;
             E = cumsum(E) ;
             E = E ./ max(E) ;
@@ -238,10 +246,9 @@ end
 
 
 %% ===== DISPLAY FILTER SPECS =====
-function DisplaySpec(iProcess, sfreq) %#ok<DEFNU>
-    % Get current process options
-    global GlobalData;
-    sProcess = GlobalData.Processes.Current(iProcess);
+function DisplaySpec(sfreq)
+    % Get current process structure
+    sProcess = panel_process_select('GetCurrentProcess');
     % Get options
     FreqList  = sProcess.options.freqlist.Value{1};
     FreqWidth = sProcess.options.freqwidth.Value{1};

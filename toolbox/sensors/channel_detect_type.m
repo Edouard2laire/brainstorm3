@@ -7,7 +7,7 @@ function ChannelMat = channel_detect_type( ChannelMat, isAlign, isRemoveFid )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -115,7 +115,7 @@ for i = 1:length(iCheck)
                 ChannelMat.Channel(iChan).Type = 'Misc';
             elseif ~isempty(strfind(chName, 'mast'))
                 ChannelMat.Channel(iChan).Type = 'MAST';
-            elseif ~isempty(strfind(chName, 'trig'))
+            elseif ~isempty(strfind(chName, 'trig')) && (length(chName) < 12)
                 ChannelMat.Channel(iChan).Type = 'STIM';
             % Head points (ZEBRIS)
             elseif ~isempty(strfind(chName, 'sfh')) || ~isempty(strfind(chName, 'sfl')) || ~isempty(strfind(chName, 'SL_')) || ~isempty(strfind(chName, 'SP_')) 

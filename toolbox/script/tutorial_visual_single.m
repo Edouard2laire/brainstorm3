@@ -14,7 +14,7 @@ function tutorial_visual_single(bids_dir, reports_dir)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -401,7 +401,8 @@ for iSubj = 1:length(SubjectNames)
         'nscalp',      1082, ...
         'nouter',      642, ...
         'ninner',      642, ...
-        'thickness',   4);
+        'thickness',   4, ...
+        'method',      'brainstorm');
 
     % ===== SELECT ALL AVERAGES =====
     % Process: Select data files in: */*

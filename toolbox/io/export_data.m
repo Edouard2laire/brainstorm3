@@ -15,7 +15,7 @@ function [ExportFile, sFileOut] = export_data(DataFile, ChannelMat, ExportFile, 
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -55,7 +55,7 @@ if iscell(DataFile)
     else
         AllOutputs = cell(1,length(DataFile));
         % Call function once to get the output path
-        AllOutputs{1} = export_data(DataFile{1}, ChannelMat, ExportFile);
+        [AllOutputs{1}, sFileOut1] = export_data(DataFile{1}, ChannelMat, ExportFile);
         if isempty(AllOutputs{1})
             ExportFile = [];
             return;
@@ -72,7 +72,7 @@ if iscell(DataFile)
             newFile = strrep(newFile, '0raw_', '');
             AllOutputs{i} = newFile;
             % Export file
-            export_data(DataFile{i}, ChannelMat, AllOutputs{i});
+            export_data(DataFile{i}, ChannelMat, AllOutputs{i}, sFileOut1.format);
         end
         ExportFile = AllOutputs;
         return;

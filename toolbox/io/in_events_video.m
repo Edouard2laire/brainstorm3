@@ -1,7 +1,7 @@
 function events = in_events_video(sFile, ChannelMat, EventFile, format)
 % IN_EVENTS_VIDEO: Read video events information from a text file 
 %
-% USAGE:  events = in_events_array(sFile, ChannelMat, EventFile) 
+% USAGE:  events = in_events_video(sFile, ChannelMat, EventFile) 
 % 
 %   EventFile must be text file in the form hh:mm:ss:ff
 
@@ -9,7 +9,7 @@ function events = in_events_video(sFile, ChannelMat, EventFile, format)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -70,6 +70,6 @@ events.epochs     = ones(1, length(eveTimes)); % Epoch: set as 1 for all the occ
 events.color      = [];
 events.reactTimes = [];
 events.select     = 1;
-events.channels   = cell(1, size(events.times, 2));
-events.notes      = cell(1, size(events.times, 2));
+events.channels   = [];
+events.notes      = [];
 

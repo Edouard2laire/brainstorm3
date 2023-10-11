@@ -9,7 +9,7 @@ function tutorial_introduction(tutorial_dir, reports_dir)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -69,6 +69,8 @@ gui_brainstorm('CreateProtocol', ProtocolName, 0, 0);
 bst_report('Start');
 % Reset colormaps
 bst_colormaps('RestoreDefaults', 'meg');
+% Set the current display mode to 'butterfly'
+bst_set('TSDisplayMode', 'butterfly');
 
 
 %% ===== TUTORIAL #2: IMPORT ANATOMY =================================================
@@ -355,8 +357,8 @@ sMatRun2 = in_bst_data(sFilesRun2{1}, 'F');
 iEvtSaccade = find(strcmpi({sMatRun2.F.events.label}, 'saccade'));
 sMatRun2.F.events(iEvtSaccade).times   = [30, 81.5, 104, 142.5, 167, 187.5, 246.5, 319;  31, 83, 105, 144, 168, 188.5, 248, 320];
 sMatRun2.F.events(iEvtSaccade).epochs  = ones(1, size(sMatRun2.F.events(iEvtSaccade).times, 2));
-sMatRun2.F.events(iEvtSaccade).channels = cell(1, size(sMatRun2.F.events(iEvtSaccade).times, 2));
-sMatRun2.F.events(iEvtSaccade).notes    = cell(1, size(sMatRun2.F.events(iEvtSaccade).times, 2));
+sMatRun2.F.events(iEvtSaccade).channels = [];
+sMatRun2.F.events(iEvtSaccade).notes    = [];
 bst_save(file_fullpath(sFilesRun2{1}), sMatRun2, 'v6', 1);
 
 % Process: SSP: saccade  (Run02 only)

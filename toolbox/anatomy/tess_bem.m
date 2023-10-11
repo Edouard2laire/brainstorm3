@@ -23,7 +23,7 @@ function isOk = tess_bem(iSubject, BemOptions, DEBUG)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -61,10 +61,10 @@ if sSubject.UseDefaultAnat
 end
 % Check layers
 if isempty(sSubject.iCortex) || isempty(sSubject.iScalp) || isempty(sSubject.iAnatomy) || isempty(sSubject.Anatomy)
-    bst_error('Computation of BEM layers requires at least: MRI + scalp surface + cortex surface.', 'BEM surfaces', 0);
-    return
+    error('Computation of BEM layers requires at least: MRI + scalp surface + cortex surface.');
 end
 % Progress bar
+isProgress = bst_progress('IsVisible');
 bst_progress('start', 'Create BEM surfaces', 'Initialization...', 0, 100);
 % Get surfaces
 CortexFile = sSubject.Surface(sSubject.iCortex(1)).FileName;
@@ -75,9 +75,9 @@ ScalpFile  = sSubject.Surface(sSubject.iScalp(1)).FileName;
 % Get default anatomy folder
 sTemplate = bst_get('AnatomyDefaults', 'ICBM152');
 if isempty(sTemplate)
-    bst_error(['The template anatomy ICBM152 is not available.' 10 ...
-               'Please update Brainstorm...'], 'BEM surfaces', 0);
-    return
+    error('The template anatomy ICBM152 is not available.');
+elseif (length(sTemplate) > 1)
+    error('Multiple templates "ICBM152" available.');
 end
 % Get subject file
 TemplateCortexFile = bst_fullfile(sTemplate.FilePath, 'tess_cortex_pial_low.mat');
@@ -130,8 +130,8 @@ vTemplateInner  = bst_bsxfun(@minus, sTemplateInner.Vertices,  sTemplateCortex.c
 p   = .2;   % Padding
 th  = -pi-p   : 0.01 : pi+p;
 phi = -pi/2-p : 0.01 : pi/2+p;
-rCortex      = tess_parametrize_new(vCortex,      th, phi);
-rTemplateCortex = tess_parametrize_new(vTemplateCortex, th, phi);
+rCortex      = tess_parametrize(vCortex,      th, phi);
+rTemplateCortex = tess_parametrize(vTemplateCortex, th, phi);
 
 
 %% ===== SURFACE ALIGNMENT =====
@@ -198,10 +198,10 @@ end
 % p   = .2;   % Padding
 % th  = -pi-p   : 0.01 : pi+p;
 % phi = -pi/2-p : 0.01 : pi/2+p;
-rHead        = tess_parametrize_new(vHead,        th, phi);
-rCortex      = tess_parametrize_new(vCortex,      th, phi);
-rTemplateCortex = tess_parametrize_new(vTemplateCortex, th, phi);
-rTemplateInner  = tess_parametrize_new(vTemplateInner,  th, phi);
+rHead        = tess_parametrize(vHead,        th, phi);
+rCortex      = tess_parametrize(vCortex,      th, phi);
+rTemplateCortex = tess_parametrize(vTemplateCortex, th, phi);
+rTemplateInner  = tess_parametrize(vTemplateInner,  th, phi);
 
 
 %% ===== COMPUTE LAYER SIZES =====
@@ -287,7 +287,7 @@ end
 % === DEFORM HEAD TO INCLUDE OUTER SKULL ===
 bst_progress('text', 'BEM: Deforming head...');
 % Parametrize outer skull
-%rOuter = tess_parametrize_new(vOuter, th, phi);
+%rOuter = tess_parametrize(vOuter, th, phi);
 % Grow head so that it is not intersecting the outerskull
 %rHead = max(rHead, rOuter + .004);
 % Reinterpolate to get head surface based on cortex surface
@@ -346,7 +346,9 @@ if DEBUG
 end
 
 % Close, success
-bst_progress('stop');
+if ~isProgress
+    bst_progress('stop');
+end
 isOk = 1;
 
 end

@@ -11,7 +11,7 @@ function [sFile, newEvents] = import_events(sFile, ChannelMat, EventFile, FileFo
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -25,7 +25,7 @@ function [sFile, newEvents] = import_events(sFile, ChannelMat, EventFile, FileFo
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2010-2021
+% Authors: Francois Tadel, 2010-2023
 
 %% ===== PARSE INPUTS =====
 if (nargin < 7) || isempty(isDelete)
@@ -92,8 +92,12 @@ end
 
 %% ===== READ FILE =====
 if isempty(newEvents)
-    % Progress bar
-    bst_progress('start', 'Import events', 'Loading file...');
+    % Start progress bar
+    isProgress = ~bst_progress('isVisible');
+    if isProgress
+        bst_progress('start', 'Import events', 'Initializing...');
+    end
+    bst_progress('text', 'Loading events file...');
     % Switch according to file format
     switch (FileFormat)
         case 'ANT'
@@ -141,12 +145,14 @@ if isempty(newEvents)
             newEvents = in_events_presentation(sFile, EventFile);
         case 'NICOLET'
             newEvents = in_events_nicolet(sFile, EventFile);
+        case 'MICROMED'
+            newEvents = in_events_micromed(sFile, EventFile);
         case 'XLTEK'
             newEvents = in_events_xltek(sFile, EventFile);
         case 'ARRAY-TIMES'
-            newEvents = in_events_array(sFile, EventFile, 'times', EventName);
+            newEvents = in_events_array(sFile, EventFile, 'times', EventName, isInteractive);
         case 'ARRAY-SAMPLES'
-            newEvents = in_events_array(sFile, EventFile, 'samples', EventName);
+            newEvents = in_events_array(sFile, EventFile, 'samples', EventName, isInteractive);
         case 'CSV-TIME'
             newEvents = in_events_csv(sFile, EventFile);
         case 'CTFVIDEO'
@@ -157,7 +163,9 @@ if isempty(newEvents)
             error('Unsupported file format.');
     end
     % Progress bar
-    bst_progress('stop');
+    if isProgress
+        bst_progress('stop');
+    end
     % If no new events: return
     if isInteractive && isempty(newEvents)
         bst_error('No events found in this file.', 'Import events', 0);
@@ -216,6 +224,24 @@ for iNew = 1:length(newEvents)
                 newEvents(iNew).times = [newEvents(iNew).times; newEvents(iNew).times + 0.001];
             end
         end
+        % Expand 'channels' field for event occurrences if needed
+        if ~isempty(sFile.events(iEvt).channels) || ~isempty(newEvents(iNew).channels)
+            if isempty(sFile.events(iEvt).channels)
+                sFile.events(iEvt).channels = cell(1, size(sFile.events(iEvt).times), 2);
+            end
+            if isempty(newEvents(iNew).channels)
+                newEvents(iNew).channels = cell(1, size(newEvents(iNew).times), 2);
+            end
+        end
+        % Expand 'notes' field for event occurrences if needed
+        if ~isempty(sFile.events(iEvt).notes) || ~isempty(newEvents(iNew).notes)
+            if isempty(sFile.events(iEvt).notes)
+                sFile.events(iEvt).notes = cell(1, size(sFile.events(iEvt).times, 2));
+            end
+            if isempty(newEvents(iNew).notes)
+                newEvents(iNew).notes = cell(1, size(newEvents(iNew).times, 2));
+            end
+        end
         % Merge events occurrences
         sFile.events(iEvt).times      = [sFile.events(iEvt).times, newEvents(iNew).times];
         sFile.events(iEvt).epochs     = [sFile.events(iEvt).epochs, newEvents(iNew).epochs];
@@ -230,8 +256,12 @@ for iNew = 1:length(newEvents)
             if ~isempty(sFile.events(iEvt).reactTimes)
                 sFile.events(iEvt).reactTimes = sFile.events(iEvt).reactTimes(iSort);
             end
-            sFile.events(iEvt).channels = sFile.events(iEvt).channels(iSort);
-            sFile.events(iEvt).notes = sFile.events(iEvt).notes(iSort);
+            if ~isempty(sFile.events(iEvt).channels)
+                sFile.events(iEvt).channels = sFile.events(iEvt).channels(iSort);
+            end
+            if ~isempty(sFile.events(iEvt).notes)
+                sFile.events(iEvt).notes = sFile.events(iEvt).notes(iSort);
+            end
         end
     end
     % Add color if does not exist yet

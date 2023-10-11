@@ -5,7 +5,7 @@ function varargout = process_granger2( varargin )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -81,10 +81,8 @@ function OutputFiles = Run(sProcess, sInputA, sInputB) %#ok<DEFNU>
     OPTIONS.pThresh      = 0.05;  % sProcess.options.pthresh.Value{1};
     OPTIONS.Freqs        = 0;
 
-    % Computation depends on the direction
-    OutputFiles = {};
-    OPTIONS.GrangerDir = 'out';
-    OutputFiles = cat(2, OutputFiles, bst_connectivity({sInputA.FileName}, {sInputB.FileName}, OPTIONS));
+    % Compute metric
+    OutputFiles = bst_connectivity(sInputA, sInputB, OPTIONS);
 end
 
 

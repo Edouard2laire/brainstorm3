@@ -9,7 +9,7 @@ function events = in_events_neuroscan(sFile, EventFile)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -55,8 +55,8 @@ for iEvt = 1:length(uniqueStim)
     else
         events(iEvt).reactTimes = [];
     end
-    events(iEvt).channels = cell(1, size(events(iEvt).times, 2));
-    events(iEvt).notes    = cell(1, size(events(iEvt).times, 2));
+    events(iEvt).channels = [];
+    events(iEvt).notes    = [];
 end
 
 % === PROCESS RESPONSE ===
@@ -74,7 +74,7 @@ for iEvt = 1:length(uniqueResp)
     else
         events(iEvtAll).reactTimes = [];
     end
-    events(iEvtAll).channels = cell(1, size(events(iEvtAll).times, 2));
-    events(iEvtAll).notes    = cell(1, size(events(iEvtAll).times, 2));
+    events(iEvtAll).channels = [];
+    events(iEvtAll).notes    = [];
 end
 

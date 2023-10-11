@@ -5,7 +5,7 @@ function sFileOut = out_fopen_edf(OutputFile, sFileIn, ChannelMat, EpochSize, iC
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -290,7 +290,15 @@ end
 %% ===== HELPER FUNCTIONS =====
 function sout = str_zeros(sin, N)
     if (isnumeric(sin))
-        sin = num2str(sin);
+        sin_str = num2str(sin);
+        if (length(sin_str) > N)
+            if ((sin > 10^-(N-3)) && (sin < 10^N-1)) || (N < 7)
+                sin_str = sprintf('%f', sin);
+            else
+                sin_str = sprintf(sprintf('%%0.%de',N-7), sin);
+            end
+        end
+        sin = sin_str;
     end
 
     sout = char(double(' ') * ones(1,N));

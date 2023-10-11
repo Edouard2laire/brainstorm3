@@ -7,7 +7,7 @@ function varargout = process_pac_ir_dynamic( varargin )
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -163,7 +163,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.seed_res.Value      = '';
     sProcess.options.seed_res.InputTypes = {'results'};
         % === ROW NAMES
-    sProcess.options.seed_tf.Comment    = 'Row name or index : ';
+    sProcess.options.seed_tf.Comment    = 'Signal name or index : ';
     sProcess.options.seed_tf.Type       = 'text';
     sProcess.options.seed_tf.Value      = '';
     sProcess.options.seed_tf.InputTypes = {'timefreq', 'matrix'};

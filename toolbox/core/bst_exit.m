@@ -10,7 +10,7 @@ function status = bst_exit()
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -24,7 +24,7 @@ function status = bst_exit()
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2008-2019
+% Authors: Francois Tadel, 2008-2023
 global GlobalData
 
 % Check that Brainstorm was fully started
@@ -108,6 +108,7 @@ fclose('all');
 if file_exist(StartFile)
     file_delete(StartFile, 1);
 end
+
 
 %% ===== RESET ALL VARIABLES =====
 % Remove global data

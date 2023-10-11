@@ -21,7 +21,7 @@ function [sMriNew, Transf, errMsg] = mri_resample(MriFile, CubeDim, Voxsize, Met
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -85,7 +85,7 @@ if (nargin < 3) || isempty(CubeDim) || isempty(Voxsize)
             bst_progress('stop');
         end
         return;
-    elseif (all(CubeDim == oldCubeDim) && all(Voxsize - oldVoxsize < 1e-4))
+    elseif (all(CubeDim == oldCubeDim) && all(abs(Voxsize - oldVoxsize) < 1e-4))
         sMriNew = sMri;
         errMsg = 'No modification.';
         if ~isProgress

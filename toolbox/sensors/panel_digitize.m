@@ -11,7 +11,7 @@ function varargout = panel_digitize(varargin)
 % This function is part of the Brainstorm software:
 % https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2020 University of Southern California & McGill University
+% Copyright (c) University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -1329,6 +1329,8 @@ function isOk = CreateSerialConnection(h, ev) %#ok<INUSD>
                 if strcmp(DigitizeOptions.UnitType,'fastrak')
                     % Set units to centimeters
                     fprintf(SerialConnection,'%s','u');
+                    % Force ASCII output format
+                    fprintf(SerialConnection,'%s','F');
                 elseif strcmp(DigitizeOptions.UnitType,'patriot')
                     % request input from stylus
                     fprintf(SerialConnection,'%s\r','L1,1');
