@@ -20,6 +20,7 @@ function varargout = process_ssmooth_surfstat( varargin )
 % =============================================================================@
 %
 % Authors: Peter Donhauser, Francois Tadel, 2015-2016
+%          Edouard Delaire, 2023
 
 eval(macro_method);
 end
@@ -54,6 +55,12 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.fwhm.Comment = '<B>FWHM</B> (Full width at half maximum):  ';
     sProcess.options.fwhm.Type    = 'value';
     sProcess.options.fwhm.Value   = {3, 'mm', 0};
+
+
+    sProcess.options.method.Comment = {'2016 (old)', '2023 - fixed FWHM (recomended)','2023 - Changing FWHM (slow)','Method :'; ...
+                                            '2016', '2023_fixed', '2023_adptive',''};
+    sProcess.options.method.Type    = 'radio_linelabel';
+    sProcess.options.method.Value   = '2016';
 end
 
 
@@ -114,31 +121,94 @@ function sInput = Run(sProcess, sInput) %#ok<DEFNU>
     
     
     % ===== PROCESS =====
+    % Smooth surface
+    method = sProcess.options.method.Value;
+
+    [sInput.A, msgInfo] = compute(SurfaceMat, sInput.A, FWHM,method);
+    bst_report('Info', sProcess, sInput, msgInfo);
+
+    % Force the output comment
+    sInput.CommentTag = [sProcess.FileTag, num2str(FWHM*1000)];
+end
+
+function [sData, msgInfo] = compute(SurfaceMat, sData, FWHM, version)
+
+    if strcmp(version,'2023_adptive')
+        % smooth each connenected part of the surface separately 
+        % first estimate the connected regions 
+
+        A = SurfaceMat.VertConn;
+        G = digraph(A);
+    
+        subgraph={};
+        for k=1:G.numnodes
+            nn_in = nearest(G,k,Inf);
+            nn_in = sort([ k; nn_in]);
+            found = 0;
+            for i=1:length(subgraph)
+                if length(nn_in) == length(subgraph{i}) &&  all(nn_in == subgraph{i})
+                    found = 1;
+                    break;
+                end    
+            end
+            if ~found
+                subgraph{end+1} = nn_in;
+            end
+        end
+
+        %smooth each region separately 
+        for i = 1:length(subgraph)
+            sSubRegion = SurfaceMat;
+            sSubRegion.Vertices = SurfaceMat.Vertices(subgraph{i},:);
+
+            iRemoveVert = setdiff(1:size(SurfaceMat.Vertices,1) , subgraph{i}  );
+            iKeptVert = subgraph{i};
+
+            iVertMap = zeros(1, size(SurfaceMat.Vertices ,1));
+            iVertMap(iKeptVert) = 1:length(iKeptVert);
+
+            iRemoveFace = find(sum(ismember(SurfaceMat.Faces, iRemoveVert), 2));
+
+            sSubRegion.Faces    = SurfaceMat.Faces;
+            % Remove faces from list
+            sSubRegion.Faces(iRemoveFace, :) = [];
+            % Renumber indices
+            sSubRegion.Faces = iVertMap(sSubRegion.Faces );
+
+            sSubRegion.VertConn = SurfaceMat.VertConn( subgraph{i},subgraph{i});
+
+            [sData( subgraph{i},:,:), msgInfo] = compute(sSubRegion, sData( subgraph{i},:,:), FWHM, '2023_fixed');
+        end
+        return;
+    end
     % Convert surface to SurfStat format
     cortS.tri = SurfaceMat.Faces;
     cortS.coord = SurfaceMat.Vertices';
 
     % Get the average edge length
     [vi,vj] = find(SurfaceMat.VertConn);
-    Vertices = SurfaceMat.VertConn;
+    
+    if strcmp(version,'2016')
+        Vertices = SurfaceMat.VertConn;
+    elseif strcmp(version,'2023_fixed')
+        Vertices = SurfaceMat.Vertices;
+    end
+
     meanDist = mean(sqrt((Vertices(vi,1) - Vertices(vj,1)).^2 + (Vertices(vi,2) - Vertices(vj,2)).^2 + (Vertices(vi,3) - Vertices(vj,3)).^2));
+    
     % FWHM in surfstat is in mesh units: Convert from millimeters to "edges"
     FWHMedge = FWHM ./ meanDist;
     
     % Display the result of this conversion
     msgInfo = ['Average distance between two vertices: ' num2str(round(meanDist*10000)/10) ' mm' 10 ...
                'SurfStatSmooth called with FWHM=' num2str(round(FWHMedge * 1000)/1000) ' edges'];
-    bst_report('Info', sProcess, sInput, msgInfo);
-    disp(['SMOOTH> ' strrep(msgInfo, char(10), [10 'SMOOTH> '])]);   
-    
-    % Smooth surface
-    for iFreq = 1:size(sInput.A,3)
-        sInput.A(:,:,iFreq) = SurfStatSmooth(sInput.A(:,:,iFreq)', cortS, FWHMedge)';
-    end
-    
-    % Force the output comment
-    sInput.CommentTag = [sProcess.FileTag, num2str(FWHM*1000)];
-end
+    disp(['SMOOTH> ' strrep(msgInfo, char(10), [10 'SMOOTH> '])]); 
 
+    for iFreq = 1:size(sData,3)
+        sData(:,:,iFreq) = SurfStatSmooth(sData(:,:,iFreq)', cortS, FWHMedge)';
+    end
+
+
+end
 
 
