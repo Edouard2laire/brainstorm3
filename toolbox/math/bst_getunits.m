@@ -261,12 +261,10 @@ function [unit, modifier] = getUnit(data)
 % getUnit('pA') should return A and -4 
 
 
-    pfs = {'y'    ,'z'    ,'a'   ,'f'    ,'p'   ,'n'   ,'\mu'    ,'m' ,'','k'   ,'M'   ,'G'   ,'T'   ,'P'   ,'E'  ,'Z'    ,'Y'    };
-    vpw = [    -24,    -21,   -18,    -15,   -12,    -9,     -6,   -3, 0   +3,    +6,    +9,   +12,   +15,  +18,    +21,    +24];
+    pfs     = {'y'    ,'z'    ,'a'   ,'f'    ,'p'   ,'n'   ,'\mu'    ,'m' ,'','k'   ,'M'   ,'G'   ,'T'   ,'P'   ,'E'  ,'Z'    ,'Y'    };        
+    Units   = {'A','mol.l-1'};
     
-    Units = {'A','mol.l-1'};
-    
-    unit = Units{cellfun(@(x)contains(data,x), Units)};
-    modifier = find(strcmp(strcat(pfs,unit),data)) - 9 ;
+    unit        = Units{cellfun(@(x)contains(data,x), Units)};
+    modifier    = find(strcmp(strcat(pfs,unit),data)) - 9 ;
 
 end
