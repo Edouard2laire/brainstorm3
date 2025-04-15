@@ -211,8 +211,29 @@ function [valFactor, valUnits] = GetExponent(val)
 end
 
 function [valFactor, valUnits] = GetSIFactor(val, originalUnit)
-
-
+%GETSIFACTOR Converts a small numerical value to an SI-prefixed format.
+%
+%   [valFactor, valUnits] = GETSIFACTOR(val, originalUnit)
+%
+%   This function finds the appropriate SI prefix to represent a small
+%   numerical value `val` in a more human-readable format, particularly
+%   when `val` is significantly smaller than 1. It returns a multiplicative
+%   factor (`valFactor`) and the updated unit string with an SI prefix
+%   (`valUnits`).
+%
+%   INPUTS:
+%       val           - A numeric scalar value (e.g., 3.2e-6)
+%       originalUnit  - A string representing the unit of the value
+%                       (e.g., 'V', 'mA', etc.). Can include a prefix.
+%
+%   OUTPUTS:
+%       valFactor     - The factor by which the input value should be
+%                       multiplied to apply the SI prefix. For example,
+%                       if val = 3.2e-6 and the prefix is μ, then
+%                       valFactor = 1e6 (i.e., 3.2 = val * valFactor).
+%       valUnits      - A string representing the new unit with the
+%                       appropriate SI prefix applied (e.g., 'μV').
+%
     % Configuration
     decPowerStep = 3;
     sigFigs      = 5;
@@ -251,9 +272,7 @@ function [valFactor, valUnits] = GetSIFactor(val, originalUnit)
     valUnits    = sprintf('%s%s', siPrefixes{prefixIndex}, unit);
 end
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%num2sip
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%n2pAdjust
 function [unit, modifier] = getUnit(data)
 % return the unit and the modifier from a string
 % getUnit('mol/l') should return mol/l and 0
