@@ -325,9 +325,8 @@ function DisplaySpec(sfreq)
     f_html = @() close(HFilterDisplayHtml(Hf,Freqs,Ht,t,FiltSpec.transient,strFilter1,strFilter2,XFreqLim));
     f_java= @() close(HFilterDisplayJava(Hf,Freqs,Ht,t,FiltSpec.transient,strFilter1,strFilter2,XFreqLim));
     
-
-    t_java = timeit(f_java);
     t_htlm = timeit(f_html);
+    t_java = timeit(f_java);
 
     fprintf('Time: \nJava: %.2f s\nHTLM: %.2f s\n', t_java, t_htlm)
 
@@ -420,6 +419,7 @@ hLabel2 = uilabel(grid, ...
 hLabel2.Layout.Row = 3; hLabel2.Layout.Column = 2;
 
 bst_progress('stop');
+pause(5);
 
 end
 
@@ -516,6 +516,8 @@ set(hFig, bst_get('ResizeFunction'), @ResizeCallback);
 ResizeCallback(hFig);
 bst_progress('stop');
 
+
+pause(5);
 % Resize function
     function ResizeCallback(hFig, ev)
         % Get figure position
