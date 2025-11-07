@@ -322,11 +322,18 @@ function DisplaySpec(sfreq)
     strFilter2 = [strFilter2 'Sampling frequency: <B>', num2str(sfreq), ' Hz</B><BR>'];
     strFilter2 = [strFilter2 'Frequency resolution: <B>' num2str(dF, '%1.5f') ' Hz</B><BR>'];
     
-    hFig = HFilterDisplay(Hf,Freqs,Ht,t,FiltSpec.transient,strFilter1,strFilter2,XFreqLim) ; 
+    f_html = @() close(HFilterDisplayHtml(Hf,Freqs,Ht,t,FiltSpec.transient,strFilter1,strFilter2,XFreqLim));
+    f_java= @() close(HFilterDisplayJava(Hf,Freqs,Ht,t,FiltSpec.transient,strFilter1,strFilter2,XFreqLim));
+    
+
+    t_java = timeit(f_java);
+    t_htlm = timeit(f_html);
+
+    fprintf('Time: \nJava: %.2f s\nHTLM: %.2f s\n', t_java, t_htlm)
 
 end
 
-function hFig = HFilterDisplay(Hf,Freqs,Ht,t,transient,strFilter1,strFilter2,XFreqLim)
+function hFig = HFilterDisplayHtml(Hf,Freqs,Ht,t,transient,strFilter1,strFilter2,XFreqLim)
 % Display filter specs and responses using uifigure and uilabel (with HTML)
 
 % Progress bar
@@ -414,4 +421,115 @@ hLabel2.Layout.Row = 3; hLabel2.Layout.Column = 2;
 
 bst_progress('stop');
 
+end
+
+
+
+function hFig = HFilterDisplayJava(Hf,Freqs,Ht,t,transient,strFilter1,strFilter2,XFreqLim)
+
+% Progress bar
+bst_progress('start', 'Filter specifications', 'Updating graphs...');
+
+% Get existing specification figure
+hFig = findobj(0, 'Type', 'Figure', 'Tag', 'FilterSpecs');
+% If the figure doesn't exist yet: create it
+if isempty(hFig)
+    hFig = figure(...
+        'MenuBar',     'none', ...
+        ... 'Toolbar',     'none', ...
+        'Toolbar',     'figure', ...
+        'NumberTitle', 'off', ...
+        'Name',        sprintf('Filter properties'), ...
+        'Tag',         'FilterSpecs', ...
+        'Units',       'Pixels');
+    % Figure already exists: re-use it
+else
+    clf(hFig);
+    figure(hFig);
+end
+% Disable the Java-related warnings after 2019b
+if (bst_get('MatlabVersion') >= 907)
+    warning('off', 'MATLAB:ui:javacomponent:FunctionToBeRemoved');
+end
+
+% Plot frequency response
+hAxesFreqz = axes('Units', 'pixels', 'Parent', hFig, 'Tag', 'AxesFreqz');
+Hf = 20.*log10(abs(Hf));
+plot(hAxesFreqz, Freqs, Hf);
+% Plot impulse response
+hAxesImpz = axes('Units', 'pixels', 'Parent', hFig, 'Tag', 'AxesImpz');
+plot(hAxesImpz, t, Ht);
+
+% Add Axes limits
+set(hAxesFreqz, 'XLim', XFreqLim);
+set(hAxesFreqz, 'YLim', [min(Hf), max(Hf)] + (max(Hf)-min(Hf)) .* [-0.05,0.05]);
+YLimImpz = [min(Ht), max(Ht)] + (max(Ht)-min(Ht)) .* [-0.05,0.05];
+set(hAxesImpz, 'XLim', [min(t), max(t)], 'YLim', YLimImpz);
+
+% Add grids
+set([hAxesFreqz, hAxesImpz], 'XGrid', 'on', 'YGrid', 'on');
+% Enable zooming by default
+zoom(hFig, 'on');
+    
+% Add legends
+title(hAxesFreqz, 'Frequency response');
+xlabel(hAxesFreqz, 'Frequency (Hz)');
+ylabel(hAxesFreqz, 'Magnitude (dB)');
+title(hAxesImpz, 'Impulse response');
+xlabel(hAxesImpz, 'Time (seconds)');
+ylabel(hAxesImpz, 'Amplitude');
+
+% Plot vertical lines to indicate effective transients (99% energy)
+line(transient.*[1 1], YLimImpz, -0.1.*[1 1], ...
+    'LineWidth', 1, ...
+    'Color',     [.7 .7 .7], ...
+    'Parent',    hAxesImpz);
+line(transient.*[-1 -1], YLimImpz, -0.1.*[1 1], ...
+    'LineWidth', 1, ...
+    'Color',     [.7 .7 .7], ...
+    'Parent',    hAxesImpz);
+text(transient .* 1.1, YLimImpz(2), '99% energy', ...
+    'Color',               [.7 .7 .7], ...
+    'FontSize',            bst_get('FigFont'), ...
+    'FontUnits',           'points', ...
+    'VerticalAlignment',   'top', ...
+    'HorizontalAlignment', 'left', ...
+    'Parent',              hAxesImpz);
+
+% Display left panel
+[jLabel1, hLabel1] = javacomponent(javax.swing.JLabel(strFilter1), [0 0 1 1], hFig);
+set(hLabel1, 'Units', 'pixels', 'BackgroundColor', get(hFig, 'Color'), 'Tag', 'Label1');
+bgColor = get(hFig, 'Color');
+jLabel1.setBackground(java.awt.Color(bgColor(1),bgColor(2),bgColor(3)));
+jLabel1.setVerticalAlignment(javax.swing.JLabel.TOP);
+
+% Display right panel
+[jLabel2, hLabel2] = javacomponent(javax.swing.JLabel(strFilter2), [0 0 1 1], hFig);
+set(hLabel2, 'Units', 'pixels', 'BackgroundColor', get(hFig, 'Color'), 'Tag', 'Label2');
+bgColor = get(hFig, 'Color');
+jLabel2.setBackground(java.awt.Color(bgColor(1),bgColor(2),bgColor(3)));
+jLabel2.setVerticalAlignment(javax.swing.JLabel.TOP);
+
+% Set resize function
+set(hFig, bst_get('ResizeFunction'), @ResizeCallback);
+% Force calling the resize function at least once
+ResizeCallback(hFig);
+bst_progress('stop');
+
+% Resize function
+    function ResizeCallback(hFig, ev)
+        % Get figure position
+        figpos = get(hFig, 'Position');
+        textH = 110;        % Text Height
+        marginL = 70;
+        marginR = 30;
+        marginT = 30;
+        marginB = 50;
+        axesH = round((figpos(4) - textH) ./ 2);
+        % Position axes
+        set(hAxesFreqz, 'Position', max(1, [marginL, textH + marginB + axesH, figpos(3) - marginL - marginR, axesH - marginB - marginT]));
+        set(hAxesImpz,  'Position', max(1, [marginL, textH + marginB,         figpos(3) - marginL - marginR, axesH - marginB - marginT]));
+        set(hLabel1,    'Position', max(1, [40,                  1,  round((figpos(3)-40)/2),  textH]));
+        set(hLabel2,    'Position', max(1, [round(figpos(3)/2),  1,  round(figpos(3)/2),       textH]));
+    end
 end
