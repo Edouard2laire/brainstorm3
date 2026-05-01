@@ -244,6 +244,16 @@ function PlugDesc = GetSupported(SelPlug, UserDefVerbose)
     PlugDesc(end).LoadFolders    = {'*'};
     PlugDesc(end).DeleteFiles    = {'.gitignore'};
 
+    % === ANATOMY: ZEFFIRO ===
+    PlugDesc(end+1)              = GetStruct('siam');
+    PlugDesc(end).Version        = 'latest';
+    PlugDesc(end).Category       = 'Anatomy';
+    PlugDesc(end).AutoUpdate     = 0;
+    PlugDesc(end).URLzip         = '';
+    PlugDesc(end).URLinfo        = 'https://github.com/romainVala/SIAM';
+    PlugDesc(end).ImageSource    = 'docker.io/romainvalabregue/siam:latest';
+    PlugDesc(end).ReadmeFile     = 'README.md';
+    PlugDesc(end).CompiledStatus = 1;
 
     % === ARTIFACTS: GEDAI ===
     PlugDesc(end+1)              = GetStruct('gedai');
