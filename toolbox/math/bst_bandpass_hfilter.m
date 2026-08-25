@@ -247,12 +247,12 @@ if (FiltSpec.mirror)
     x = [fliplr(x(:,1:M)), x, fliplr(x(:,end-M+1:end))];
 % Constant-padding
 else
-    % Use replicate padding. Average within the boundary to limit impact
-    % of first / last sample that might be noisy. 
-    padLeft = mean(x(:,1:iE99), 2) .* ones(nChan,M);
-    padRight = mean(x(:,(end-iE99+1):end), 2) .* ones(nChan,M);
-
-    x = [padLeft, x, padRight] ;
+    % Set constat to average within the boundary to limit impact of first/last sample
+    leftUpperLimit  = min(iE99, nTime);
+    rightLowerLimit = max(1, nTime-iE99+1);
+    padLeft  = ones(nChan,M) .* mean(x(:,1:leftUpperLimit), 2);
+    padRight = ones(nChan,M) .* mean(x(:,rightLowerLimit:end), 2);
+    x = [padLeft, x, padRight];
 end
 
 % Filter signals
