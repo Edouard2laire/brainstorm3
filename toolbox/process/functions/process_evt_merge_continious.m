@@ -56,6 +56,12 @@ function sProcess = GetDescription()
     sProcess.options.evt_sufix.Comment = 'Event suffix';
     sProcess.options.evt_sufix.Type    = 'text';
     sProcess.options.evt_sufix.Value   = 'continuous';
+
+    % Minimum events durations
+    sProcess.options.min_duration.Comment = 'Minimum event duration: ';
+    sProcess.options.min_duration.Type    = 'value';
+    sProcess.options.min_duration.Value   = {30, 's', 0};
+
     
 end
 
@@ -87,6 +93,8 @@ function OutputFiles = Run(sProcess, sInput)
 
     % Ignore bad segmens 
     ignore_bad = sProcess.options.ignore_bad.Value;
+    min_duration = sProcess.options.min_duration.Value{1};
+
 
     % ===== GET FILE DESCRIPTOR =====
     isRaw = strcmpi(sInput.FileType, 'raw');
@@ -142,7 +150,7 @@ function OutputFiles = Run(sProcess, sInput)
     end
 
     % Recreate continuous events
-    newEvents = mask2events(sFile.Time, mask, sEvents, evt_sufix);
+    newEvents = mask2events(sFile.Time, mask, sEvents, min_duration, evt_sufix);
     
     sFile.events = [sFile.events , newEvents];
 
@@ -175,9 +183,11 @@ function mask = event2mask(Time, sEvents)
 
 end
 
-function newEvents = mask2events(Time, mask, sEvents, evt_sufix)
+function newEvents = mask2events(Time, mask, sEvents, min_duration, evt_sufix)
     
     newEvents = sEvents;
+    isIncluded = true(1, length(sEvents));
+
     for iEvt = 1:length(sEvents)
         
         newEvents(iEvt).label = sprintf('%s/%s', newEvents(iEvt).label, evt_sufix);
@@ -192,10 +202,17 @@ function newEvents = mask2events(Time, mask, sEvents, evt_sufix)
         if length(start_segment) ==  length(end_segment) +1
             end_segment = [ end_segment length(sData.Time)];
         end  
+        
+        new_times  = [ Time(start_segment) ;  Time(end_segment)  ];
+        
+        evt_durations = new_times(2,:) - new_times(1,:);
+        
+        isIncluded(iEvt) = any(evt_durations >= min_duration);
 
-        newEvents(iEvt).times  = [ Time(start_segment) ;  Time(end_segment)  ];
-        newEvents(iEvt).epochs = ones(1, length(start_segment));
+        newEvents(iEvt).times  = new_times(:, evt_durations >= min_duration);
+        newEvents(iEvt).epochs = ones(1, size(newEvents(iEvt).times, 2));
     end
 
+    newEvents = newEvents(isIncluded);
 end
 
