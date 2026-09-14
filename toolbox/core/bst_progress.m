@@ -106,7 +106,6 @@ jBstFrame   = bst_get('BstFrame');
 if isempty(jBstFrame)
     jBstFrame = struct('setCursor', @(x)nan );
 end
-DefaultSize = java_scaled('dimension', 350, 130);
 
 if isempty(pBar)  && ~strcmpi(commandName, 'start')
     % Restore cursor
@@ -126,6 +125,7 @@ switch (lower(commandName))
         if ix  < max_bar 
             % Create a new progress bar
             ix = ix + 1;
+            DefaultSize = java_scaled('dimension', 350, 130);
             pBar = createProgressBar(DefaultSize, caller_name, ix);
             GlobalData.Program.ProgressBar{ix} = pBar;
         end
@@ -217,6 +217,7 @@ switch (lower(commandName))
         pBar.jImage.setIcon([]);
         java_setcb(pBar.jImage, 'MouseClickedCallback', []);
         UpdateConstraints(pBar,0);
+        DefaultSize = java_scaled('dimension', 350, 130);
         pBar.jWindow.setPreferredSize(DefaultSize);
         pBar.jWindow.pack();
 
