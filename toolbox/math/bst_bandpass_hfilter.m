@@ -248,8 +248,9 @@ if (FiltSpec.mirror)
 % Constant-padding
 else
     % Set constat to average within the boundary to limit impact of first/last sample
-    leftUpperLimit  = min(iE99, nTime);
-    rightLowerLimit = max(1, nTime-iE99+1);
+    nTransient = round(FiltSpec.transient*Fs);
+    leftUpperLimit  = min(nTransient, nTime);
+    rightLowerLimit = max(1, nTime-nTransient+1);
     padLeft  = ones(nChan,M) .* mean(x(:,1:leftUpperLimit), 2);
     padRight = ones(nChan,M) .* mean(x(:,rightLowerLimit:end), 2);
     x = [padLeft, x, padRight];
