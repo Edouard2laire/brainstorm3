@@ -123,7 +123,7 @@ function OutputFiles = Run(sProcess, sInput)
     % Create binary mask for the outer events
     mask = event2mask(sFile.Time, sEventsOuter);
     for iEvent = 1:length(sEventsInner)
-        newEvents = classifyEvent(sFile.Time, sEventsInner, mask, sEventsOuter, ignore_overlapping);
+        newEvents = classifyEvent(sFile.Time, sEventsInner(iEvent), mask, sEventsOuter, ignore_overlapping);
         sFile.events = [sFile.events , newEvents];
     end
 
