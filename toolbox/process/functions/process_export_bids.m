@@ -54,29 +54,14 @@ function sProcess = GetDescription()
     sProcess.options.bidsdir.Comment = 'Output folder:';
     sProcess.options.bidsdir.Type    = 'filename';
     sProcess.options.bidsdir.Value   = SelectOptions;
-    % Identify naming schemes
-    sProcess.options.subscheme.Comment = {'Custom names', 'Number index', 'Subject names (sub-XXXX): '};
-    sProcess.options.subscheme.Type    = 'radio_line';
-    sProcess.options.subscheme.Value   = 2;
-    sProcess.options.sesscheme.Comment = {'Acquisition date', 'Number index', 'Custom names', 'Session names (ses-XXXX): '};
-    sProcess.options.sesscheme.Type    = 'radio_line';
-    sProcess.options.sesscheme.Value   = 1;
-    % Identifying empty room
-    sProcess.options.emptyroom.Comment = 'Keywords to detect empty room recordings: ';
-    sProcess.options.emptyroom.Type    = 'text';
-    sProcess.options.emptyroom.Value   = 'emptyroom, noise';
-    % Replace existing files
-    sProcess.options.defacemri.Comment = 'Deface MRI before export?';
-    sProcess.options.defacemri.Type    = 'checkbox';
-    sProcess.options.defacemri.Value   = 0;
     % Replace existing files
     sProcess.options.overwrite.Comment = 'Overwrite existing files?';
     sProcess.options.overwrite.Type    = 'checkbox';
     sProcess.options.overwrite.Value   = 0;
     
-    % Options: BIDS metadata (project, dataset description, MEG/EEG/NIRS sidecars).
-    % If the output folder already contains a BIDS dataset, its metadata is loaded in the panel.
-    sProcess.options.edit.Comment = {'panel_export_bids', ' BIDS metadata (authors, license, modality-specific fields): '};
+    % Options: file naming, anatomy, metadata (project, dataset description, MEG/EEG/NIRS sidecars).
+    % If the output folder already contains a BIDS dataset, its naming scheme and metadata are loaded in the panel.
+    sProcess.options.edit.Comment = {'panel_export_bids', ' Export options (file naming, anatomy, modalities, metadata): '};
     sProcess.options.edit.Type    = 'editpref';
     sProcess.options.edit.Value   = [];
 end
@@ -92,9 +77,7 @@ end
 function sInputs = Run(sProcess, sInputs) 
     %% ===== PARSE OPTIONS =====
     outputFolder  = sProcess.options.bidsdir.Value{1};
-    defaceMri     = sProcess.options.defacemri.Value;
     overwrite     = sProcess.options.overwrite.Value;
-    emptyRoomKeywords = strtrim(str_split(lower(sProcess.options.emptyroom.Value), ',;'));
     if isempty(outputFolder)
         bst_report('Error', sProcess, sInputs, 'No output folder specified.');
         return;
@@ -106,11 +89,8 @@ function sInputs = Run(sProcess, sInputs)
         bst_report('Error', sProcess, sInputs, 'List of authors cannot be empty. Click "Edit..." to fill in the BIDS metadata.');
         return;
     end
-    if any(OPTIONS.PowerLine == [50, 60])
-        powerline = OPTIONS.PowerLine;
-    else
-        powerline = 'n/a';
-    end
+    defaceMri = OPTIONS.DefaceMri;
+    emptyRoomKeywords = strtrim(str_split(lower(OPTIONS.EmptyRoomKeywords), ',;'));
     % Additional JSON fields: dataset description + one sidecar per modality
     jsonList = {'JsonDataset', 'dataset description'; 'JsonMeg', 'MEG sidecar'; 'JsonEeg', 'EEG sidecar'; 'JsonNirs', 'NIRS sidecar'};
     jsonStructs = cell(1, size(jsonList, 1));
@@ -128,10 +108,9 @@ function sInputs = Run(sProcess, sInputs)
     [datasetMetadata, megMetadata, eegMetadata, nirsMetadata] = deal(jsonStructs{:});
     % Settings shared by all the exported files
     settings = struct('Overwrite',    overwrite, ...
-                      'PowerLine',    powerline, ...
                       'Options',      OPTIONS, ...
                       'SidecarExtra', struct('meg', megMetadata, 'eeg', eegMetadata, 'nirs', nirsMetadata));
-    naming = GetNamingSchemes(sProcess);
+    naming = GetNamingSchemes(OPTIONS);
     
     %% ===== OUTPUT FOLDER =====
     % Create it, or load the subject/session mapping of a previous export
@@ -216,24 +195,8 @@ end
 % Subjects:  -1 = custom names, 4 = zero-padded index
 % Sessions:  -2 = acquisition date, -1 = custom names, 4 = zero-padded index
 % Runs:       2 = zero-padded index
-function naming = GetNamingSchemes(sProcess)
-    naming = struct('SubScheme', -1, 'SesScheme', -2, 'RunScheme', 2, 'LastSub', 0);
-    if isfield(sProcess.options, 'subscheme') && ~isempty(sProcess.options.subscheme.Value)
-        if sProcess.options.subscheme.Value == 1
-            naming.SubScheme = -1;
-        else
-            naming.SubScheme = 4;
-        end
-    end
-    if isfield(sProcess.options, 'sesscheme') && ~isempty(sProcess.options.sesscheme.Value)
-        if sProcess.options.sesscheme.Value == 1
-            naming.SesScheme = -2;
-        elseif sProcess.options.sesscheme.Value == 3
-            naming.SesScheme = -1;
-        else
-            naming.SesScheme = 4;
-        end
-    end
+function naming = GetNamingSchemes(OPTIONS)
+    naming = struct('SubScheme', OPTIONS.SubScheme, 'SesScheme', OPTIONS.SesScheme, 'RunScheme', 2, 'LastSub', 0);
 end
 
 % Create the output folder, or load the mapping of an existing one.
@@ -255,7 +218,7 @@ function [data, iLastSub, errMsg] = PrepareOutputFolder(outputFolder, naming)
     if isempty(prevSubScheme) || isempty(prevSesScheme) || isempty(prevRunScheme)
         data = EmptyData();
     % Warn user for different naming schemes
-    elseif naming.SubScheme ~= prevSubScheme || naming.SesScheme ~= prevSesScheme || naming.RunScheme ~= prevRunScheme
+    elseif naming.SubScheme ~= prevSubScheme || ~SessionSchemeCompatible(naming.SesScheme, prevSesScheme) || naming.RunScheme ~= prevRunScheme
         disp(['Warning: Chosen naming scheme(s) different from existing one.' ...
             10 '         Ignoring existing subjects/sessions in output folder.']);
         data = EmptyData();
@@ -306,8 +269,9 @@ function [plan, data, errMsg] = BuildExportPlan(sInputs, data, outputFolder, nam
         if ~isempty(errMsg)
             return;
         end
-        isEmptyRoom = strcmp(info.sSubject.Name, 'sub-emptyroom') || ...
-                      (~isempty(emptyRoomKeywords) && containsKeyword(lower(info.SessionName), emptyRoomKeywords));
+        isEmptyRoom = ismember('meg', info.Modalities) && ...
+                      (strcmp(info.sSubject.Name, 'sub-emptyroom') || ...
+                       (~isempty(emptyRoomKeywords) && containsKeyword(lower(info.SessionName), emptyRoomKeywords)));
         if isEmptyRoom
             % Empty room recordings are stored in sub-emptyroom, with the real subject in the "acq" entity
             bidsSubjectId = 'emptyroom';
@@ -319,7 +283,7 @@ function [plan, data, errMsg] = BuildExportPlan(sInputs, data, outputFolder, nam
             subLabel = FormatId(bidsSubjectId, naming.SubScheme, 'sub');
             % Last numbered session already in the subject folder
             lastSesNum = 0;
-            if ~isEmptyRoom && naming.SesScheme >= 0
+            if ~isEmptyRoom && naming.SesScheme ~= -2
                 lastSesNum = GetLastId(bst_fullfile(outputFolder, subLabel), 'ses');
             end
             if isEmptyRoom
@@ -344,7 +308,7 @@ function [plan, data, errMsg] = BuildExportPlan(sInputs, data, outputFolder, nam
         end
         iSes = FindNodeById(sub.Sessions, sessionId);
         if isempty(iSes)
-            sesLabel = FormatId(sessionId, naming.SesScheme, 'ses');
+            sesLabel = FormatSessionLabel(sessionId, naming.SesScheme);
             sub.Sessions{end + 1} = struct('Id', sessionId, 'Label', sesLabel, ...
                 'Prefix', [sub.Label '_' sesLabel], 'Runs', {{}});
             iSes = length(sub.Sessions);
@@ -467,17 +431,33 @@ function [data, subjectId, naming, errMsg] = ResolveSubject(data, sSubject, nami
     data = AddSubject(data, sSubject.Name, subjectId);
 end
 
+% 'ses-<id>' label. With custom names (-1), sessions without a label in their name are numbered.
+function label = FormatSessionLabel(sessionId, sesScheme)
+    if isnumeric(sessionId) && sesScheme < 0
+        label = FormatId(sessionId, 4, 'ses');
+    else
+        label = FormatId(sessionId, sesScheme, 'ses');
+    end
+end
+
+% Custom names (-1) can be mixed with numbered sessions
+function isOk = SessionSchemeCompatible(sesScheme, prevSesScheme)
+    isOk = (sesScheme == prevSesScheme) || (sesScheme == -1 && prevSesScheme >= 0);
+end
+
 % Find the BIDS session and run index for a Brainstorm study, create them in the mapping if new
 function [data, sessionId, runId, lastSesNum, errMsg] = ResolveSession(data, subjectId, info, sesScheme, lastSesNum)
     errMsg = '';
     sessionName = info.SessionName;
 
     % Session names formatted as "<subject>_ses-<id>_..."
+    hasSessionLabel = false;
     subLen = length(info.sSubject.Name);
     if length(sessionName) > (subLen + 6) && strncmp(sessionName(subLen+6:end), 'ses-', 4)  
         tokens = regexp(sessionName, '_ses-(\w+)_', 'tokens', 'once');
         if ~isempty(tokens)
             sessionName = tokens{1};
+            hasSessionLabel = true;
         end
     end
 
@@ -488,17 +468,22 @@ function [data, sessionId, runId, lastSesNum, errMsg] = ResolveSession(data, sub
     end
 
     % New session
-    if sesScheme == -1
-        % Char-based naming scheme
+    if sesScheme == -1 && hasSessionLabel
+        % Custom names: use the session label found in the name
         sessionId = FormatId(sessionName, sesScheme);
     elseif sesScheme == -2
         % Date-based naming scheme
         sessionId = datestr(info.DateOfStudy, 'yyyymmdd');
     else
-        % Number-based naming scheme, increment from previous
+        % Number-based naming scheme, increment from previous.
+        % Also used by the custom names scheme when the name contains no session label.
         sessionId = lastSesNum + 1;
-        maxSessions = power(10, sesScheme);
-        if sesScheme > 1 && sessionId >= maxSessions
+        numDigits = sesScheme;
+        if numDigits < 0
+            numDigits = 4;
+        end
+        maxSessions = power(10, numDigits);
+        if numDigits > 1 && sessionId >= maxSessions
             errMsg = ['Exceeded maximum number of sessions supported by your naming scheme (' num2str(maxSessions) ').'];
             return;
         end
@@ -658,6 +643,7 @@ function ExportMeg(sRun, ChannelMat, bids, settings)
     
     % Sidecar fields
     metadata = GetCommonMetadata(settings.SidecarExtra.meg, sRun, settings);
+    metadata = addField(metadata, 'PowerLineFrequency', PowerLineValue(settings.Options.MegPowerLine));
     metadata = addField(metadata, 'DewarPosition', valueOrNA(settings.Options.DewarPosition));
     metadata = addField(metadata, 'DigitizedLandmarks', bool2str(hasLandmarks));
     metadata = addField(metadata, 'DigitizedHeadPoints', bool2str(hasHeadPoints));
@@ -701,6 +687,7 @@ function ExportEeg(sRun, ChannelMat, bids, settings)
     % Sidecar fields
     OPTIONS = settings.Options;
     metadata = GetCommonMetadata(settings.SidecarExtra.eeg, sRun, settings);
+    metadata = addField(metadata, 'PowerLineFrequency', PowerLineValue(OPTIONS.EegPowerLine));
     metadata = addField(metadata, 'EEGReference', valueOrNA(OPTIONS.EegReference));
     metadata = addIfNotEmpty(metadata, 'EEGGround', OPTIONS.EegGround);
     metadata = addIfNotEmpty(metadata, 'CapManufacturer', OPTIONS.EegCapManufacturer);
@@ -739,13 +726,13 @@ function ExportNirs(sRun, ChannelMat, bids, settings)
 end
 
 %% ===== FILES COMMON TO ALL MODALITIES =====
-% Sidecar fields common to all modalities, on top of the additional fields entered in the panel
+% Sidecar fields common to all modalities (PowerLineFrequency is only for MEG and EEG),
+% on top of the additional fields entered in the panel
 function metadata = GetCommonMetadata(extraMetadata, sRun, settings)
     metadata = extraMetadata;
     metadata = addField(metadata, 'TaskName', sRun.TaskName);
     metadata = addField(metadata, 'Manufacturer', sRun.sFile.device);
     metadata = addField(metadata, 'SamplingFrequency', sRun.sFile.prop.sfreq);
-    metadata = addField(metadata, 'PowerLineFrequency', settings.PowerLine);
 end
 
 % Fields extracted from the original recording, depending on the device
@@ -1435,10 +1422,11 @@ function OPTIONS = LoadMetadataOptions(sProcess, outputFolder)
     if isstruct(panelValue) && ~isempty(panelValue)
         OPTIONS = struct_copy_fields(OPTIONS, panelValue, 1);
     elseif ~strcmp(OPTIONS.PreparedFor, outputFolder)
-        [existing, nFound] = panel_export_bids('ReadExistingMetadata', outputFolder);
+        % Panel not validated for this folder: keep the metadata and naming scheme of an existing dataset
+        [folderOptions, nFound] = panel_export_bids('GetOptionsForFolder', outputFolder);
         if nFound > 0
             disp('BIDS> Using the metadata found in the existing output folder. Click "Edit..." to modify it.');
-            OPTIONS = struct_copy_fields(panel_export_bids('GetDefaultOptions'), existing, 1);
+            OPTIONS = folderOptions;
         end
     end
 end
@@ -1446,6 +1434,13 @@ end
 function myStruct = addIfNotEmpty(myStruct, field, value)
     if ~isempty(value)
         myStruct = addField(myStruct, field, value);
+    end
+end
+
+% 50, 60 or 'n/a'
+function value = PowerLineValue(value)
+    if ~any(value == [50, 60])
+        value = 'n/a';
     end
 end
 

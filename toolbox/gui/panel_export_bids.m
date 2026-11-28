@@ -1,8 +1,8 @@
 function varargout = panel_export_bids(varargin)
 % PANEL_EXPORT_BIDS: Metadata options for the BIDS export (tabbed panel).
 %
-% Tabs: General | MEG | EEG | NIRS  (modality tabs are shown only for the
-% modalities found in the files selected for export).
+% Tabs: File naming | General | Anatomy | MEG | EEG | NIRS
+% (the modality tabs are shown only for the modalities found in the files selected for export).
 %
 % If the BIDS output folder already exists, the metadata it contains
 % (dataset_description.json, README, modality sidecar JSON files) is read and
@@ -12,6 +12,7 @@ function varargout = panel_export_bids(varargin)
 %                   s = panel_export_bids('GetPanelContents')
 %                   s = panel_export_bids('GetOptions')            % defaults + saved preferences
 %                   s = panel_export_bids('GetDefaultOptions')
+%       [s, nFound] = panel_export_bids('GetOptionsForFolder', bidsFolder)   % last used values, or existing dataset
 %       [s, nFound] = panel_export_bids('ReadExistingMetadata', bidsFolder)
 %                   r = panel_export_bids('ParseReadme', readmeFile)
 
@@ -81,6 +82,16 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)  %#ok<DEFNU>
     ctrl = struct();
     ctrl.BidsFolder = bidsFolder;
     
+    % --- File naming tab ---
+    jTab = javax.swing.JPanel();
+    jTab.setLayout(javax.swing.BoxLayout(jTab, javax.swing.BoxLayout.Y_AXIS));
+    jSec = CreateSection(jTab, 'Subject and session names');
+    ctrl = AddRadioGroup(jSec, ctrl, 'SubScheme', 'Subject names (sub-XXXX): ', {'Custom names', 'Number index'});
+    ctrl = AddRadioGroup(jSec, ctrl, 'SesScheme', 'Session names (ses-XXXX): ', {'Acquisition date', 'Number index', 'Custom names (ses-XXX in the name, number if none)'});
+    gui_component('Label', jSec, 'br', ' ');
+    gui_component('Label', jSec, 'br', 'Changing the naming scheme of an existing dataset ignores its existing subjects and sessions.');
+    AddTab(jTabs, 'File naming', jTab);
+    
     % --- General tab ---
     jTab = javax.swing.JPanel();
     jTab.setLayout(javax.swing.BoxLayout(jTab, javax.swing.BoxLayout.Y_AXIS));
@@ -99,25 +110,27 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)  %#ok<DEFNU>
     ctrl.jTextEthics           = AddTextArea(jSec, 'Ethics approvals (one per line): ', 2);
     ctrl.jTextReferences       = AddTextArea(jSec, 'References and links (one per line): ', 2);
     ctrl.jTextJsonDataset      = AddTextArea(jSec, 'Additional dataset_description.json fields (JSON): ', 3);
-    jSec = CreateSection(jTab, 'Recording (all modalities)');
-    gui_component('Label', jSec, '', 'Power line frequency: ');
-    ctrl.jRadioPL50 = gui_component('Radio', jSec, '', '50 Hz');
-    ctrl.jRadioPL60 = gui_component('Radio', jSec, '', '60 Hz');
-    ctrl.jRadioPL0  = gui_component('Radio', jSec, '', 'Not specified (n/a)');
-    jGroupPL = javax.swing.ButtonGroup();
-    jGroupPL.add(ctrl.jRadioPL50);
-    jGroupPL.add(ctrl.jRadioPL60);
-    jGroupPL.add(ctrl.jRadioPL0);
     AddTab(jTabs, 'General', jTab);
+    
+    % --- Anatomy tab ---
+    jTab = javax.swing.JPanel();
+    jTab.setLayout(javax.swing.BoxLayout(jTab, javax.swing.BoxLayout.Y_AXIS));
+    jSec = CreateSection(jTab, 'Anatomy (anat folder)');
+    ctrl.jCheckDefaceMri = gui_component('CheckBox', jSec, 'br', 'Deface MRI before export');
+    AddTab(jTabs, 'Anatomy', jTab);
     
     % --- MEG tab ---
     if modalities.meg
         jTab = javax.swing.JPanel();
         jTab.setLayout(javax.swing.BoxLayout(jTab, javax.swing.BoxLayout.Y_AXIS));
         jSec = CreateSection(jTab, 'MEG sidecar (*_meg.json)');
+        ctrl = AddRadioGroup(jSec, ctrl, 'MegPowerLine', 'Power line frequency: ', {'50 Hz', '60 Hz', 'Not specified (n/a)'});
         ctrl.jTextDewarPosition = AddTextRow(jSec,  'Position of the dewar during the scan: ');
         ctrl.jTextDewarPosition.setToolTipText('Upright, Supine or Degrees of angle');
         ctrl.jTextJsonMeg       = AddTextArea(jSec, 'Additional MEG sidecar fields (JSON): ', 6);
+        jSec = CreateSection(jTab, 'Empty room recordings');
+        ctrl.jTextEmptyRoomKeywords = AddTextRow(jSec, 'Keywords to detect empty room recordings (comma-separated): ');
+        ctrl.jTextEmptyRoomKeywords.setToolTipText('Studies with one of these keywords in their name are exported in sub-emptyroom');
         AddTab(jTabs, 'MEG', jTab);
     end
     
@@ -126,6 +139,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)  %#ok<DEFNU>
         jTab = javax.swing.JPanel();
         jTab.setLayout(javax.swing.BoxLayout(jTab, javax.swing.BoxLayout.Y_AXIS));
         jSec = CreateSection(jTab, 'EEG sidecar (*_eeg.json)');
+        ctrl = AddRadioGroup(jSec, ctrl, 'EegPowerLine', 'Power line frequency: ', {'50 Hz', '60 Hz', 'Not specified (n/a)'});
         ctrl.jTextEegReference       = AddTextRow(jSec,  'Electrode reference used: ');
         ctrl.jTextEegGround          = AddTextRow(jSec,  'Ground electrode: ');
         ctrl.jTextEegCapManufacturer = AddTextRow(jSec,  'Cap manufacturer: ');
@@ -182,7 +196,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)  %#ok<DEFNU>
         end
         % Authors are required in dataset_description.json
         if isempty(ExportBidsOptions.Authors)
-            jTabs.setSelectedIndex(0);
+            jTabs.setSelectedIndex(jTabs.indexOfTab('General'));
             java_dialog('warning', 'The list of authors cannot be empty.', 'Missing metadata', jPanelMain);
             return;
         end
@@ -204,13 +218,25 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)  %#ok<DEFNU>
                 ctrl.(ctrlName).setText(Options.(names{iName}));
             end
         end
-        switch Options.PowerLine
-            case 50
-                ctrl.jRadioPL50.setSelected(true);
-            case 60
-                ctrl.jRadioPL60.setSelected(true);
-            otherwise
-                ctrl.jRadioPL0.setSelected(true);
+        % Radio buttons and check boxes
+        defaults = GetDefaultOptions();
+        radios = RadioOptions();
+        for iRadio = 1:size(radios, 1)
+            radioName = radios{iRadio,1};
+            radioValues = radios{iRadio,2};
+            if isfield(ctrl, ['jRadio' radioName '1'])
+                iSelected = find(radioValues == Options.(radioName), 1);
+                if isempty(iSelected)
+                    iSelected = find(radioValues == defaults.(radioName), 1);
+                end
+                ctrl.(['jRadio' radioName num2str(iSelected)]).setSelected(true);
+            end
+        end
+        checks = CheckOptionNames();
+        for iCheck = 1:length(checks)
+            if isfield(ctrl, ['jCheck' checks{iCheck}])
+                ctrl.(['jCheck' checks{iCheck}]).setSelected(logical(Options.(checks{iCheck})));
+            end
         end
     end
 
@@ -235,13 +261,23 @@ function s = GetPanelContents() %#ok<DEFNU>
             s.(names{iName}) = strtrim(char(ctrl.(ctrlName).getText()));
         end
     end
-    if isfield(ctrl, 'jRadioPL50')
-        if ctrl.jRadioPL50.isSelected()
-            s.PowerLine = 50;
-        elseif ctrl.jRadioPL60.isSelected()
-            s.PowerLine = 60;
-        else
-            s.PowerLine = 0;
+    radios = RadioOptions();
+    for iRadio = 1:size(radios, 1)
+        radioName = radios{iRadio,1};
+        radioValues = radios{iRadio,2};
+        if isfield(ctrl, ['jRadio' radioName '1'])
+            for iValue = 1:length(radioValues)
+                if ctrl.(['jRadio' radioName num2str(iValue)]).isSelected()
+                    s.(radioName) = radioValues(iValue);
+                    break;
+                end
+            end
+        end
+    end
+    checks = CheckOptionNames();
+    for iCheck = 1:length(checks)
+        if isfield(ctrl, ['jCheck' checks{iCheck}])
+            s.(checks{iCheck}) = double(ctrl.(['jCheck' checks{iCheck}]).isSelected());
         end
     end
     % Remember for which folder these options were validated
@@ -282,7 +318,7 @@ function names = TextOptionNames()
     names = {'ProjName', 'ProjID', 'ProjDesc', 'Categories', ...
              'Authors', 'License', 'DatasetDOI', 'HowToAcknowledge', 'Acknowledgements', ...
              'Funding', 'Ethics', 'References', 'JsonDataset', ...
-             'DewarPosition', 'JsonMeg', ...
+             'DewarPosition', 'JsonMeg', 'EmptyRoomKeywords', ...
              'EegReference', 'EegGround', 'EegCapManufacturer', 'EegCapModel', 'JsonEeg', ...
              'NirsSourceType', 'NirsDetectorType', 'NirsCapManufacturer', 'NirsCapModel', 'JsonNirs'};
 end
@@ -304,12 +340,19 @@ function s = GetDefaultOptions() %#ok<DEFNU>
     s.Ethics           = '';
     s.References       = '';
     s.JsonDataset      = '';
-    % General: sidecars (50, 60, or 0 = n/a)
-    s.PowerLine = 60;
-    % MEG
-    s.DewarPosition = 'Upright';
-    s.JsonMeg       = '';
+    % File naming. Subjects: -1 = custom names, 4 = number index.
+    %              Sessions: -2 = acquisition date, 4 = number index, -1 = custom names.
+    s.SubScheme = 4;
+    s.SesScheme = -2;
+    % Anatomy
+    s.DefaceMri = 0;
+    % MEG (power line: 50, 60, or 0 = n/a)
+    s.MegPowerLine       = 60;
+    s.DewarPosition      = 'Upright';
+    s.JsonMeg            = '';
+    s.EmptyRoomKeywords  = 'emptyroom, noise';
     % EEG
+    s.EegPowerLine       = 60;
     s.EegReference       = 'Cz';
     s.EegGround          = '';
     s.EegCapManufacturer = '';
@@ -323,6 +366,45 @@ function s = GetDefaultOptions() %#ok<DEFNU>
     s.JsonNirs            = '';
     % Output folder for which the options were last validated in the panel
     s.PreparedFor = '';
+end
+
+% Options edited with radio buttons: {name, values}. Control names: ['jRadio' name '<index of the value>']
+function radios = RadioOptions()
+    radios = {'SubScheme',    [-1, 4]; ...
+              'SesScheme',    [-2, 4, -1]; ...
+              'MegPowerLine', [50, 60, 0]; ...
+              'EegPowerLine', [50, 60, 0]};
+end
+
+% Options edited with a check box. Control names: ['jCheck' name]
+function names = CheckOptionNames()
+    names = {'DefaceMri'};
+end
+
+% Export settings, as opposed to the metadata describing the dataset
+function names = SettingOptionNames()
+    names = {'SubScheme', 'SesScheme', 'DefaceMri', 'EmptyRoomKeywords'};
+end
+
+% Options to use for an output folder:
+%  - last used values (saved preferences)
+%  - if the folder contains a BIDS dataset: its metadata replaces the dataset metadata fields
+%    (blank/default if not found), and its naming scheme is detected. The other export settings
+%    (deface, empty room keywords) keep their last used values.
+function [Options, nFound] = GetOptionsForFolder(bidsFolder)
+    Options = GetOptions();
+    [existing, nFound] = ReadExistingMetadata(bidsFolder);
+    if nFound > 0
+        defaults = GetDefaultOptions();
+        keepNames = [SettingOptionNames(), {'PreparedFor'}];
+        names = fieldnames(defaults);
+        for i = 1:length(names)
+            if ~ismember(names{i}, keepNames)
+                Options.(names{i}) = defaults.(names{i});
+            end
+        end
+    end
+    Options = MergeStruct(Options, existing);
 end
 
 % Default options overridden by the saved preferences
@@ -342,24 +424,15 @@ end
 
 % Values to display when opening the panel
 function [Options, infoMsg] = GetInitialOptions(bidsFolder)
-    Options = GetDefaultOptions();
-    nFound = 0;
-    if ~isempty(bidsFolder) && exist(bidsFolder, 'dir') == 7
-        [existing, nFound] = ReadExistingMetadata(bidsFolder);
-    end
+    [Options, nFound] = GetOptionsForFolder(bidsFolder);
     if nFound > 0
-        % Existing dataset: what is in the folder wins over saved preferences
-        Options = MergeStruct(Options, existing);
         infoMsg = 'Existing BIDS metadata loaded from the output folder. Edit it or keep it as is.';
+    elseif isempty(bidsFolder)
+        infoMsg = 'No output folder selected: showing the last used values.';
+    elseif exist(bidsFolder, 'dir') == 7
+        infoMsg = 'No BIDS metadata found in the output folder: showing the last used values.';
     else
-        Options = GetOptions();
-        if isempty(bidsFolder)
-            infoMsg = 'No output folder selected: showing the last used values.';
-        elseif exist(bidsFolder, 'dir') == 7
-            infoMsg = 'No BIDS metadata found in the output folder: showing the last used values.';
-        else
-            infoMsg = 'New dataset: showing the last used values.';
-        end
+        infoMsg = 'New dataset: showing the last used values.';
     end
 end
 
@@ -441,9 +514,9 @@ function [s, nFound] = ReadExistingMetadata(bidsFolder)
     %% ===== Sidecar JSON files =====
     % {folder/suffix, JSON option, {json field, option name; ...}}
     modInfo = {...
-        'meg',  'JsonMeg',  {'DewarPosition', 'DewarPosition'}; ...
-        'eeg',  'JsonEeg',  {'EEGReference', 'EegReference'; 'EEGGround', 'EegGround'; 'CapManufacturer', 'EegCapManufacturer'; 'CapManufacturersModelName', 'EegCapModel'}; ...
-        'nirs', 'JsonNirs', {'SourceType', 'NirsSourceType'; 'DetectorType', 'NirsDetectorType'; 'CapManufacturer', 'NirsCapManufacturer'; 'CapManufacturersModelName', 'NirsCapModel'}};
+        'meg',  'JsonMeg',  {'DewarPosition', 'DewarPosition'}, 'MegPowerLine'; ...
+        'eeg',  'JsonEeg',  {'EEGReference', 'EegReference'; 'EEGGround', 'EegGround'; 'CapManufacturer', 'EegCapManufacturer'; 'CapManufacturersModelName', 'EegCapModel'}, 'EegPowerLine'; ...
+        'nirs', 'JsonNirs', {'SourceType', 'NirsSourceType'; 'DetectorType', 'NirsDetectorType'; 'CapManufacturer', 'NirsCapManufacturer'; 'CapManufacturersModelName', 'NirsCapModel'}, ''};
     % Fields that are specific to each recording, generated at export: not copied to the additional JSON
     perFileFields = {'TaskName', 'SamplingFrequency', 'Manufacturer', 'DigitizedLandmarks', 'DigitizedHeadPoints', ...
         'SoftwareFilters', 'RecordingDuration', 'RecordingType', 'EpochLength', 'ContinuousHeadLocalization', ...
@@ -451,24 +524,34 @@ function [s, nFound] = ReadExistingMetadata(bidsFolder)
         'EOGChannelCount', 'ECGChannelCount', 'EMGChannelCount', 'MiscChannelCount', 'TriggerChannelCount', ...
         'NIRSChannelCount', 'NIRSSourceOptodeCount', 'NIRSDetectorOptodeCount', 'AssociatedEmptyRoom', ...
         'SubjectArtefactDescription', 'HeadCoilFrequency', 'MaxMovement', 'TaskDescription'};
-    powerLineFound = false;
     for iMod = 1:size(modInfo, 1)
         sidecar = FindSidecar(bidsFolder, modInfo{iMod,1});
         if isempty(sidecar)
             continue;
         end
         nFound = nFound + 1;
-        % Power line frequency is common to all modalities
-        if isfield(sidecar, 'PowerLineFrequency')
-            if ~powerLineFound
-                s.PowerLine = ParsePowerLine(sidecar.PowerLineFrequency);
-                powerLineFound = true;
-            end
+        % Power line frequency (MEG and EEG only)
+        if ~isempty(modInfo{iMod,4}) && isfield(sidecar, 'PowerLineFrequency')
+            s.(modInfo{iMod,4}) = ParsePowerLine(sidecar.PowerLineFrequency);
             sidecar = rmfield(sidecar, 'PowerLineFrequency');
         end
         [s, sidecar] = PopFields(s, sidecar, [modInfo{iMod,3}, repmat({'char'}, size(modInfo{iMod,3}, 1), 1)]);
         sidecar = RemoveFields(sidecar, perFileFields);
         s.(modInfo{iMod,2}) = StructToJson(sidecar);
+    end
+    
+    %% ===== Naming scheme of the existing subjects and sessions =====
+    try
+        [subScheme, sesScheme] = process_export_bids('DetectNamingScheme', bidsFolder);
+    catch
+        subScheme = [];
+        sesScheme = [];
+    end
+    if isscalar(subScheme) && ismember(subScheme, [-1, 4])
+        s.SubScheme = subScheme;
+    end
+    if isscalar(sesScheme) && ismember(sesScheme, [-2, 4, -1])
+        s.SesScheme = sesScheme;
     end
 end
 
@@ -610,6 +693,17 @@ function jSection = CreateSection(jTab, sectionTitle)
     jSection.setBorder(javax.swing.BorderFactory.createCompoundBorder(...
         java_scaled('titledborder', sectionTitle), javax.swing.BorderFactory.createEmptyBorder(0,5,0,0)));
     jTab.add(jSection);
+end
+
+% Label + one radio button per choice, on one line. The controls are added to ctrl as ['jRadio' optName '<i>']
+function ctrl = AddRadioGroup(jSection, ctrl, optName, label, choices)
+    gui_component('Label', jSection, 'br', label);
+    jGroup = javax.swing.ButtonGroup();
+    for iChoice = 1:length(choices)
+        jRadio = gui_component('Radio', jSection, '', choices{iChoice});
+        jGroup.add(jRadio);
+        ctrl.(['jRadio' optName num2str(iChoice)]) = jRadio;
+    end
 end
 
 % Label + single-line text field
